@@ -29,8 +29,10 @@ self.addEventListener('fetch', e => {
   if (url.pathname.indexOf('/shared/') === 0) return;
 
   // 全部走网络优先，离线才回退缓存
+  // 关键：cache:'reload' 绕过浏览器 HTTP 缓存（微信内置浏览器缓存很顽固）
+  const isHtml = req.mode === 'navigate' || (req.headers.get('accept')||'').includes('text/html');
   e.respondWith(
-    fetch(req).then(res => {
+    fetch(req, isHtml ? {cache:'reload'} : undefined).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
       return res;
