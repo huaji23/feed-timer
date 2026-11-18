@@ -387,6 +387,14 @@ input,select{font:inherit;color:inherit}
             <button data-t="eye">护眼</button>
           </div>
         </div>
+        <div class="fld stack">
+          <div class="k">分享给家人<small>带名字的链接，对方打开就是同一份记录</small></div>
+          <div class="btnrow" style="padding:0">
+            <button onclick="shareBaby(true)" id="shareBabyBtn">分享当前宝宝</button>
+            <button onclick="shareBaby(false)">复制空白链接</button>
+          </div>
+          <div class="hint-line" id="shareHint"></div>
+        </div>
         <div class="fld">
           <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
           <button class="icon-btn" onclick="askNotify()" id="notifyBtn">开启</button>
@@ -810,6 +818,8 @@ function fillSettings(){
   document.getElementById('notifyBtn').textContent = Notification.permission==='granted'?'已开启':'开启';
   // 主题选中态
   paintThemeSeg();
+  const sb=document.getElementById('shareBabyBtn');
+  if(sb) sb.textContent = '分享「'+(S.name||'宝宝')+'」';
 }
 
 /* ---------- 名字：确认后才保存 ---------- */
@@ -956,8 +966,12 @@ async function switchBaby(name){
   name=(name||'').trim();
   if(!name) return;
 
-  // 1. 当前档案先存回本地
-  setLocalProfile(babyKey(), {feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings});
+  // 1. 当前档案先存回本地（没数据就不存，避免造出空档案）
+  const curName=babyKey();
+  const hasData = D.feeds.length||D.diapers.length||D.weights.length;
+  if(curName && (hasData || curName!=='宝宝')){
+    setLocalProfile(curName, {feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings});
+  }
 
   // 2. 拉云端
   const all=await cloudFetch();
@@ -987,9 +1001,8 @@ async function switchBaby(name){
   }
   await cloudPut(all);
 
-  cloudMsg='已切换到「'+name+'」';
-  render();
-  setTimeout(()=>{cloudMsg='';},2500);
+  setUrlBaby(name);
+  showToast('已切换到「'+name+'」', 2500);
 }
 
 function applyProfile(name, p){
@@ -1004,10 +1017,97 @@ function applyProfile(name, p){
   save();
 }
 
+/* ================= 分享链接 ================= */
+function getUrlBaby(){
+  try{
+    const q=new URLSearchParams(location.search);
+    return (q.get('baby')||'').trim();
+  }catch(e){ return ''; }
+}
+
+/* 地址栏同步当前档案名（刷新不丢） */
+function setUrlBaby(name){
+  try{
+    const u=new URL(location.href);
+    if(name) u.searchParams.set('baby', name);
+    else u.searchParams.delete('baby');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+  }catch(e){}
+}
+
+/* 分享用链接（name 为空 = 不带名字） */
+function linkFor(name){
+  const base = location.origin + location.pathname;
+  return name ? base + '?baby=' + encodeURIComponent(name) : base;
+}
+
+/* 轻提示 */
+let toastTimer=null;
+function showToast(m, ms){
+  cloudMsg=m; render();
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ cloudMsg=''; render(); }, ms||2600);
+}
+
+/* 复制到剪贴板（含降级方案） */
+async function copyText(t){
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(t); return true;
+    }
+  }catch(e){}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta); return ok;
+  }catch(e){ return false; }
+}
+
+/* 分享（withName=true 带宝宝名字） */
+async function shareBaby(withName){
+  const nm = withName ? babyKey() : '';
+  const url = linkFor(nm);
+  const title = withName ? (nm+' · 喂奶计时') : '喂奶计时';
+
+  // 优先系统分享面板（手机上好用）
+  if(navigator.share){
+    try{
+      await navigator.share({ title, text: withName ? ('一起记录'+nm+'的喂奶') : '喂奶计时', url });
+      showToast('已打开分享');
+      return;
+    }catch(e){ /* 用户取消或不支持，走复制 */ }
+  }
+  const ok = await copyText(url);
+  if(ok){
+    showToast(withName ? ('链接已复制（带「'+nm+'」）') : '空白链接已复制', 2600);
+  }else{
+    // 复制失败 → 弹只读框，长按手动复制
+    openSheet(`<h3>${withName?('分享「'+nm+'」'):'空白链接'}</h3>
+      <div class="hint-line" style="text-align:left;padding:0 20px 10px">长按下面的链接，选择「全选 → 拷贝」</div>
+      <input type="text" id="shareOut" readonly value="${url}"
+        style="width:calc(100% - 40px);margin:0 20px;background:var(--card2);border:1px solid var(--line);
+               border-radius:12px;padding:12px;font-size:13px;color:var(--tx)">
+      <div class="actions"><button onclick="closeSheet()">关闭</button>
+        <button class="pri" onclick="tryCopyAgain('${url.replace(/'/g,"\\'")}')">再试复制</button></div>`);
+    setTimeout(()=>{
+      const el=document.getElementById('shareOut');
+      if(el){ el.focus(); el.select(); }
+    },120);
+  }
+}
+
+async function tryCopyAgain(url){
+  const ok=await copyText(url);
+  showToast(ok?'已复制':'还是失败，请长按手动复制', 2200);
+  if(ok) closeSheet();
+}
+
 /* 打开档案切换弹层 */
 function openBabySwitch(){
   const names=Object.keys(localProfiles());
-  let html=`<h3>选择宝宝</h3>
+  let html=`<h3>宝宝档案</h3>
     <div class="chips">`;
   if(names.length){
     html+=names.map(n=>`<button class="chip${n===babyKey()?' on':''}" onclick="switchBaby('${n.replace(/'/g,"\\'")}');closeSheet()">${n}</button>`).join('');
@@ -1094,6 +1194,19 @@ render();
 
 /* 启动时：如果本地有档案名，自动拉一次云端（拿到别人刚记的） */
 (async function boot(){
+  // ① 链接带 ?baby=名字 → 直接用该档案（家人点分享链接走这里）
+  const urlBaby=getUrlBaby();
+  if(urlBaby){
+    if(urlBaby===babyKey() && (D.feeds.length||D.diapers.length)){
+      // 已经是这个档案，只后台拉一次云端合并
+      await switchBaby(urlBaby);
+    }else{
+      await switchBaby(urlBaby);
+      showToast('已加载「'+urlBaby+'」的记录', 3000);
+    }
+    return;
+  }
+  // ② 无参数 → 用上次的档案，从云端拉一次
   const nm=babyKey();
   if(nm && nm!=='宝宝'){
     const all=await cloudFetch();
@@ -1104,6 +1217,12 @@ render();
       setLocalProfile(nm, merged);
       render();
     }
+    return;
+  }
+  // ③ 第一次用（没名字也没档案）→ 引导输入
+  if(Object.keys(localProfiles()).length===0){
+    showToast('先输入宝宝名字，开始记录', 3200);
+    setTimeout(()=>openBabySwitch(), 400);
   }
 })();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
