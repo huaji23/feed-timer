@@ -315,6 +315,9 @@ body.selecting #v-log{padding-bottom:150px}
 
     <div class="sec">
       <h2>最近记录</h2>
+      <div class="hdr-row" style="padding:0 0 10px">
+        <button class="mini-btn" onclick="jumpLog()">批量删除 / 管理</button>
+      </div>
       <div class="card" id="recent"></div>
     </div>
   </div>
@@ -686,14 +689,43 @@ function feedDesc(f){
   return {a:'瓶喂', b:(f.ml?f.ml+' 毫升':'')};
 }
 function renderRecent(){
-  const box=document.getElementById('recent'); const list=D.feeds.slice(0,4);
-  box.innerHTML = list.length? list.map(f=>{
-    const d=feedDesc(f);
-    return `<div class="row" onclick="delFeed('${f.id}')">
-      <div class="t">${clock(f.ts)}</div>
-      <div class="m"><div class="a">${d.a}</div><div class="b">${d.b||''}</div></div>
-      <div class="d">${hhmmss(f.dur||0)}</div></div>`;
+  const box=document.getElementById('recent');
+  // 统一时间线：喂奶 + 尿布 + 体重，最近 6 条
+  const evs=[];
+  D.feeds.forEach(f=>evs.push({kind:'feed',ts:f.ts,o:f}));
+  D.diapers.forEach(d=>evs.push({kind:'diaper',ts:d.ts,o:d}));
+  D.weights.forEach(w=>evs.push({kind:'weight',ts:w.ts,o:w}));
+  evs.sort((a,b)=>b.ts-a.ts);
+  const list=evs.slice(0,6);
+
+  box.innerHTML = list.length? list.map(e=>{
+    const t=clock(e.ts);
+    if(e.kind==='feed'){
+      const d=feedDesc(e.o);
+      return `<div class="row" onclick="jumpLog()">
+        <div class="t">${t}</div>
+        <div class="m"><div class="a">${d.a}</div><div class="b">${d.b||''}</div></div>
+        <div class="d">${hhmmss(e.o.dur||0)}</div></div>`;
+    }
+    if(e.kind==='diaper'){
+      const dd=e.o;
+      const lbl = dd.type==='poop'?'💩 大便': dd.type==='both'?'💧💩 尿了+大便':'💧 尿了';
+      return `<div class="row" onclick="jumpLog()">
+        <div class="t">${t}</div>
+        <div class="m"><div class="a">${lbl}</div><div class="b">尿布</div></div>
+        <div class="d"></div></div>`;
+    }
+    return `<div class="row" onclick="jumpLog()">
+      <div class="t">${t}</div>
+      <div class="m"><div class="a">⚖ 体重</div><div class="b">${e.o.kg} kg</div></div>
+      <div class="d"></div></div>`;
   }).join('') : `<div class="empty">还没有记录 · 点上面大圆开始</div>`;
+}
+
+/* 从最近记录点进去 → 跳到记录页并直接进多选，方便批量删 */
+function jumpLog(){
+  go('log');
+  if(!selectMode) toggleSelect();
 }
 /* ================= 多选删除 ================= */
 let selectMode=false;
@@ -1458,12 +1490,24 @@ render();
   const nm=babyKey();
   if(nm && nm!=='宝宝'){
     const all=await cloudFetch();
+    const localHas = D.feeds.length || D.diapers.length || D.weights.length;
+
     if(all && all[nm]){
+      // 云端有 → 合并
       const merged=mergeProfile(all[nm], getLocalProfile(nm));
       merged.settings=Object.assign({}, merged.settings, {name:nm});
       applyProfile(nm, merged);
       setLocalProfile(nm, merged);
       render();
+      // 合并后本地比云端多 → 推回云端
+      const remoteN=(all[nm].feeds||[]).length+(all[nm].diapers||[]).length+(all[nm].weights||[]).length;
+      const localN=D.feeds.length+D.diapers.length+D.weights.length;
+      if(localN>remoteN) pushCloud();
+    }else if(all && localHas){
+      // 云端没有这个档案，但本地有数据 → 主动上传（修复"分享出去看不到历史"）
+      all[nm]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings};
+      const ok=await cloudPut(all);
+      if(ok){ setLocalProfile(nm, all[nm]); showToast('本机记录已上传云端', 2600); }
     }
     return;
   }
