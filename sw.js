@@ -1,5 +1,5 @@
 /* Service Worker —— 网络优先（保证更新立刻生效），离线回退缓存 */
-const CACHE = 'feedtimer-v29';
+const CACHE = 'feedtimer-v30';
 const ASSETS = ['./manifest.json', './icon-180.png', './icon-512.png'];  // HTML 不缓存
 
 self.addEventListener('install', e => {
