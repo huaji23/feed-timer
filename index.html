@@ -639,25 +639,74 @@ function renderRecent(){
 }
 function renderLog(){
   const box=document.getElementById('logAll');
-  if(!D.feeds.length && !D.diapers.length){ box.innerHTML='<div class="empty">暂无记录</div>'; return; }
+  const total=D.feeds.length+D.diapers.length+D.weights.length;
+  if(!total){ box.innerHTML='<div class="empty">暂无记录</div>'; return; }
+
+  // 统一时间线：喂奶 + 尿布 + 体重
+  const events=[];
+  D.feeds.forEach(f=>events.push({kind:'feed', ts:f.ts, o:f}));
+  D.diapers.forEach(d=>events.push({kind:'diaper', ts:d.ts, o:d}));
+  D.weights.forEach(w=>events.push({kind:'weight', ts:w.ts, o:w}));
+  events.sort((a,b)=>b.ts-a.ts);
+
+  // 按天分组
   const groups={};
-  D.feeds.forEach(f=>{ (groups[dayKey(f.ts)]=groups[dayKey(f.ts)]||[]).push(f); });
+  events.forEach(e=>{ const k=dayKey(e.ts); (groups[k]=groups[k]||[]).push(e); });
   const days=Object.keys(groups).sort().reverse();
+
   let html='';
   days.forEach(k=>{
-    const fs=groups[k];
-    const tot=fs.reduce((a,b)=>a+(b.dur||0),0);
-    html+=`<div class="daylabel">${k} · 共 ${fs.length} 次 / ${hhmm(tot)}</div>`;
-    html+=fs.map((f,i)=>{
-      const d=feedDesc(f); const prev=groups[k][i+1];
-      const gap=prev? hhmm((f.ts-prev.ts)/1000):'';
-      return `<div class="row" onclick="delFeed('${f.id}')">
-        <div class="t">${clock(f.ts)}</div>
-        <div class="m"><div class="a">${d.a}</div><div class="b">${d.b||''}${gap?' · 距上次 '+gap:''}</div></div>
-        <div class="d">${hhmmss(f.dur||0)}</div></div>`;
+    const es=groups[k];
+    const feedsOfDay=es.filter(e=>e.kind==='feed');
+    const tot=feedsOfDay.reduce((a,b)=>a+(b.o.dur||0),0);
+    const peeOfDay=es.filter(e=>e.kind==='diaper'&&(e.o.type==='pee'||e.o.type==='both')).length;
+    const pooOfDay=es.filter(e=>e.kind==='diaper'&&(e.o.type==='poop'||e.o.type==='both')).length;
+
+    let label=`${k} · 喂奶 ${feedsOfDay.length} 次 / ${hhmm(tot)}`;
+    if(peeOfDay||pooOfDay) label+=(peeOfDay?' · 💧'+peeOfDay:'')+(pooOfDay?' 💩'+pooOfDay:'');
+    html+=`<div class="daylabel">${label}</div>`;
+
+    // 计算相邻喂奶间隔
+    const feedTs=feedsOfDay.map(e=>e.o.ts).sort((a,b)=>b-a);
+
+    html+=es.map(e=>{
+      const t=clock(e.ts);
+      if(e.kind==='feed'){
+        const f=e.o, d=feedDesc(f);
+        const idx=feedTs.indexOf(f.ts);
+        const prev=idx>=0 && idx<feedTs.length-1 ? feedTs[idx+1] : null;
+        const gap=prev? hhmm((f.ts-prev)/1000):'';
+        return `<div class="row" onclick="delFeed('${f.id}')">
+          <div class="t">${t}</div>
+          <div class="m"><div class="a">${d.a}</div>
+            <div class="b">${d.b||''}${gap?' · 距上次 '+gap:''}</div></div>
+          <div class="d">${hhmmss(f.dur||0)}</div></div>`;
+      }
+      if(e.kind==='diaper'){
+        const dd=e.o;
+        const lbl = dd.type==='poop'?'💩 大便': dd.type==='both'?'💧💩 尿了+大便':'💧 尿了';
+        return `<div class="row" onclick="delDiaper('${dd.id}')">
+          <div class="t">${t}</div>
+          <div class="m"><div class="a">${lbl}</div><div class="b">尿布</div></div>
+          <div class="d"></div></div>`;
+      }
+      const w=e.o;
+      return `<div class="row" onclick="delWeight('${w.id}')">
+        <div class="t">${t}</div>
+        <div class="m"><div class="a">⚖ 体重</div><div class="b">${w.kg} kg</div></div>
+        <div class="d"></div></div>`;
     }).join('');
   });
   box.innerHTML=html;
+}
+
+function delDiaper(id){
+  if(!confirm('删除这条尿布记录？')) return;
+  D.diapers=D.diapers.filter(d=>d.id!==id); save(); render(); pushCloud();
+}
+function delWeight(id){
+  if(!confirm('删除这条体重记录？')) return;
+  D.weights=D.weights.filter(w=>w.id!==id); save(); render(); pushCloud();
 }
 function renderStats(){
   const tf=D.feeds.filter(f=>f.ts>=today());
