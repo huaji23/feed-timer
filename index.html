@@ -508,7 +508,8 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v14';
+const APP_VER='v15';
+const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
 const CLOUD_KEY='feedtimer.cloud.v1';  // 本地记住用过的档案
@@ -1183,7 +1184,8 @@ function saveName(){
 function paintThemeSeg(){
   const btns=document.querySelectorAll('#themeSeg button');
   if(!btns.length) return;
-  const cur=S.theme||'dark';
+  let cur;
+  try{ cur=localStorage.getItem(THEME_KEY) || S.theme || 'dark'; }catch(e){ cur=S.theme||'dark'; }
   btns.forEach(b=>{
     const on=(b.dataset.t||'dark')===cur;
     b.classList.toggle('on', on);
@@ -1202,6 +1204,8 @@ function paintThemeSeg(){
 
 function setTheme(t){
   S.theme=t;
+  // 主题存独立 key —— 切档案 / 云端合并都不会覆盖它
+  try{ localStorage.setItem(THEME_KEY, t); }catch(e){}
   localStorage.setItem(KEY,JSON.stringify(D));
   document.documentElement.setAttribute('data-theme',t);
   const meta=document.querySelector('meta[name=theme-color]');
@@ -1211,7 +1215,9 @@ function setTheme(t){
   render();
 }
 function applyTheme(){
-  const t=S.theme||'dark';
+  let t;
+  try{ t=localStorage.getItem(THEME_KEY) || S.theme || 'dark'; }catch(e){ t=S.theme||'dark'; }
+  S.theme=t;
   document.documentElement.setAttribute('data-theme',t);
   const meta=document.querySelector('meta[name=theme-color]');
   if(meta) meta.setAttribute('content', t==='light'?'#F5F6F8': t==='eye'?'#1E2418':'#0F1115');
@@ -1315,11 +1321,7 @@ async function switchBaby(name){
   merged.settings=Object.assign({}, merged.settings, {name});
 
   // 4. 应用（保留原来的主题偏好，不让换档案把主题重置）
-  const keepTheme=S.theme;
-  applyProfile(name, merged);
-  if(!merged.settings || !merged.settings.theme){
-    if(keepTheme){ S.theme=keepTheme; save(); }
-  }
+  applyProfile(name, merged);   // 主题由 applyProfile 内部保留
 
   // 5. 把合并结果写回云端（顺便把别的档案也带上）
   all[name]=merged;
@@ -1338,8 +1340,11 @@ function applyProfile(name, p){
   D.weights=p.weights||[];
   // 注意：S 是 const 且 D.settings 与 S 同引用，
   // 这里必须「原地改」而不是替换对象，否则 S 会指向旧对象、名字改不掉
+  const keepTheme=S.theme;
   Object.keys(S).forEach(k=>delete S[k]);
   Object.assign(S, p.settings||{}, {name});
+  // 主题是设备级偏好：档案没带主题就沿用当前主题，别让切档案把主题重置
+  if(keepTheme && !(p.settings && p.settings.theme)) S.theme=keepTheme;
   D.settings=S;
   save();
 }
