@@ -487,7 +487,7 @@ body.selecting #v-log{padding-bottom:150px}
         </div>
         <div class="fld">
           <div class="k">版本<small>显示不对就点这里强制更新</small></div>
-          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v14</button>
+          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">…</button>
         </div>
         <div class="fld">
           <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
@@ -520,7 +520,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v22';
+const APP_VER='v23';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1693,6 +1693,8 @@ document.querySelectorAll('#themeSeg button').forEach(b=>{
 });
 applyTheme();
 render();
+/* 版本号立刻显示（不用进设置页） */
+(function(){ const vb=document.getElementById('verBtn'); if(vb) vb.textContent=APP_VER; })();
 
 /* 启动时：如果本地有档案名，自动拉一次云端（拿到别人刚记的） */
 
@@ -1764,7 +1766,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v22';
+  var APP_VER='v23';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
