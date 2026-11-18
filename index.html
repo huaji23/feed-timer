@@ -284,6 +284,19 @@ body.selecting #v-log{padding-bottom:150px}
   box-shadow:0 10px 36px rgba(0,0,0,.55), 0 0 0 1px rgba(240,168,104,.25);
 }
 .toast.on{transform:translateY(0) scale(1);opacity:1;pointer-events:auto}
+/* 成功提示：绿色描边 + 更强阴影，一眼看出「成功了」 */
+.toast.ok{
+  background:color-mix(in srgb, var(--ok) 16%, var(--card2));
+  border-color:var(--ok);
+  box-shadow:0 10px 36px rgba(0,0,0,.55), 0 0 0 1px color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.toast.ok span{color:var(--tx)}
+/* 错误提示：红色描边 */
+.toast.err{
+  background:color-mix(in srgb, #E4573D 18%, var(--card2));
+  border-color:#E4573D;
+}
+.toast.err span{color:var(--tx)}
 .toast span{flex:1;font-size:15.5px;color:var(--tx);line-height:1.4;font-weight:600}
 .toast button{
   flex:none;background:transparent;border:1px solid var(--acc);color:var(--acc);
@@ -596,7 +609,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v29';
+const APP_VER='v30';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -613,7 +626,6 @@ function load(){
 }
 const S = D.settings;
 const set=(k,v)=>{ S[k]=v; save(); };
-function save(){ localStorage.setItem(KEY, JSON.stringify(D)); }
 
 /* ================= 状态 ================= */
 let sess = JSON.parse(localStorage.getItem('feedtimer.sess')||'null'); // {mode,start,acc,paused,pauseT,side,sides,ml}
@@ -713,14 +725,14 @@ function sideSec(){
 /* ================= 渲染 ================= */
 function render(){
   // 顶栏
-  document.getElementById('babyName').textContent = S.name||'宝宝';
+  const byName=document.getElementById('babyName'); if(byName) byName.textContent = S.name||'宝宝';
   const last = D.feeds[0];
   const tf = D.feeds.filter(f=>f.ts>=today());
   const tfDur = tf.reduce((a,b)=>a+(b.dur||0),0);
   const tdD = D.diapers.filter(d=>d.ts>=today());
   const tdPee = tdD.filter(d=>d.type==='pee'||d.type==='both').length;
   const tdPoo = tdD.filter(d=>d.type==='poop'||d.type==='both').length;
-  document.getElementById('topSub').textContent =
+  const topSub=document.getElementById('topSub'); if(topSub) topSub.textContent =
     (last? `距上次 ${hhmm((Date.now()-last.ts)/1000)} · `:'')
     + `今日 ${tf.length} 次 / ${hhmm(tfDur)}`
     + (tdPee||tdPoo ? ` · 💧${tdPee}${tdPoo?' 💩'+tdPoo:''}` : '')
@@ -734,6 +746,7 @@ function render(){
         cl=document.getElementById('tClock'), sub=document.getElementById('tSub'),
         hint=document.getElementById('hint');
   const sidesEl=document.getElementById('sides');
+  if(!t||!big||!cl||!sub||!hint||!sidesEl) return;   // 关键节点缺失就直接跳过渲染
   t.classList.remove('run','paused');
 
   if(sess){
@@ -742,20 +755,22 @@ function render(){
     cl.textContent=hhmmss(el);
     if(sess.paused){ t.classList.add('paused'); sub.textContent='已暂停 · 点击继续'; }
     else { t.classList.add('run'); sub.textContent='点击结束'; }
-    document.getElementById('pauseBtn').style.display='';
-    document.getElementById('pauseBtn').textContent = sess.paused?'继续':'暂停';
+    const pb=document.getElementById('pauseBtn');
+    if(pb){ pb.style.display=''; pb.textContent = sess.paused?'继续':'暂停'; }
 
     if(mode==='breast'){
       sidesEl.style.display='flex';
       const s=sideSec();
-      document.getElementById('lv').textContent=hhmmss(s.L/1000);
-      document.getElementById('rv').textContent=hhmmss(s.R/1000);
-      document.getElementById('sideL').classList.toggle('act',sess.side==='L');
-      document.getElementById('sideR').classList.toggle('act',sess.side==='R');
+      const lv=document.getElementById('lv'), rv=document.getElementById('rv');
+      if(lv) lv.textContent=hhmmss(s.L/1000);
+      if(rv) rv.textContent=hhmmss(s.R/1000);
+      const sL=document.getElementById('sideL'), sR=document.getElementById('sideR');
+      if(sL) sL.classList.toggle('act',sess.side==='L');
+      if(sR) sR.classList.toggle('act',sess.side==='R');
       const lim=(S.sideMin||12)*60*1000;   // 毫秒
       const urge = sess.side==='L'? s.R>=lim : s.L>=lim;
-      document.getElementById('sideL').classList.toggle('urge',urge&&sess.side==='R');
-      document.getElementById('sideR').classList.toggle('urge',urge&&sess.side==='L');
+      if(sL) sL.classList.toggle('urge',urge&&sess.side==='R');
+      if(sR) sR.classList.toggle('urge',urge&&sess.side==='L');
       const cur=sess.side==='L'?s.L:s.R;
       hint.textContent = urge? '该换边了' : (cur>=lim? '可以换边了':'');
       hint.classList.toggle('alarm',!!urge);
@@ -764,16 +779,16 @@ function render(){
     cl.style.display='none'; big.style.display='block';
     big.textContent = mode==='breast'?'开始亲喂' : mode==='bottle'?'开始瓶喂':'开始吸奶';
     sub.textContent = '点击一下开始';
-    document.getElementById('pauseBtn').style.display='none';
+    const pb2=document.getElementById('pauseBtn'); if(pb2) pb2.style.display='none';
     // 母乳模式下即使没开始，也显示左右侧（可预选起始侧）
     if(mode==='breast'){
       sidesEl.style.display='flex';
-      document.getElementById('lv').textContent='0:00';
-      document.getElementById('rv').textContent='0:00';
-      document.getElementById('sideL').classList.toggle('act',curSide==='L');
-      document.getElementById('sideR').classList.toggle('act',curSide==='R');
-      document.getElementById('sideL').classList.remove('urge');
-      document.getElementById('sideR').classList.remove('urge');
+      const lv2=document.getElementById('lv'), rv2=document.getElementById('rv');
+      if(lv2) lv2.textContent='0:00';
+      if(rv2) rv2.textContent='0:00';
+      const cL=document.getElementById('sideL'), cR=document.getElementById('sideR');
+      if(cL){ cL.classList.toggle('act',curSide==='L'); cL.classList.remove('urge'); }
+      if(cR){ cR.classList.toggle('act',curSide==='R'); cR.classList.remove('urge'); }
     } else { sidesEl.style.display='none'; }
     hint.textContent=''; hint.classList.remove('alarm');
   }
@@ -787,7 +802,10 @@ function render(){
       mlBox.innerHTML='<div style="flex:1;display:flex;gap:6px;justify-content:center">'+
         [60,90,120,150,180].map(v=>`<button class="mlc" onclick="pickMl(${v},this)">${v}</button>`).join('')+
         '</div>';
-      document.querySelector('.stage').insertBefore(mlBox, document.querySelector('.acts'));
+      const stage=document.querySelector('.stage');
+      const actsEl=document.querySelector('.acts');
+      if(stage && actsEl && stage.contains(actsEl)) stage.insertBefore(mlBox, actsEl);
+      else if(stage) stage.appendChild(mlBox);
     }
     mlBox.style.display='';
     if(!mlBox.querySelector('input')){
@@ -799,7 +817,10 @@ function render(){
     }
   } else if(mlBox){ mlBox.style.display='none'; }
 
-  renderRecent(); renderLog(); renderStats();
+  // 列表/统计渲染分段兜底：某一块出错不影响其它块，也不影响已保存的记录
+  try{ renderRecent(); }catch(e){ console.error('renderRecent 失败', e); }
+  try{ renderLog(); }catch(e){ console.error('renderLog 失败', e); }
+  try{ renderStats(); }catch(e){ console.error('renderStats 失败', e); }
 }
 function pickMl(v,el){ document.getElementById('mlInput').value=v; mlBox.querySelectorAll('.mlc').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
 
@@ -1023,6 +1044,10 @@ function delWeight(id){
   bigToast('已删除 1 条');
 }
 function renderStats(){
+  // 安全写入：元素不存在就跳过，绝不抛错
+  const setHtml=(id,html)=>{ const el=document.getElementById(id); if(el) el.innerHTML=html; };
+  const setStyle=(id,prop,val)=>{ const el=document.getElementById(id); if(el) el.style[prop]=val; };
+
   const tf=D.feeds.filter(f=>f.ts>=today());
   const dur=tf.reduce((a,b)=>a+(b.dur||0),0);
   const gaps=[]; for(let i=0;i<tf.length-1;i++) gaps.push((tf[i].ts-tf[i+1].ts)/3600000);
@@ -1031,14 +1056,14 @@ function renderStats(){
   const pee=td.filter(d=>d.type!=='poop').length, poo=td.filter(d=>d.type==='poop').length;
   const ml=D.feeds.filter(f=>f.ts>=today()&&f.ml).reduce((a,b)=>a+b.ml,0);
   const lastW=D.weights[0];
-  document.getElementById('statToday').innerHTML=[
+  setHtml('statToday',[
     ['喂奶次数',tf.length,'次'],['喂奶总时长',Math.round(dur/60),'分'],
     ['平均间隔',avgGap?avgGap.toFixed(1):'—','小时'],['距上次喂',D.feeds[0]?Math.round((Date.now()-D.feeds[0].ts)/60000):'—','分']
-  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
-  document.getElementById('statExtra').innerHTML=[
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join(''));
+  setHtml('statExtra',[
     ['尿布',pee,'次'],['大便',poo,'次'],
     ['今日奶量',ml,'ml'],['最新体重',lastW?kgToJin(lastW.kg):'—',lastW?'斤':'']
-  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join(''));
 
   // 7 天柱状
   const days=[]; for(let i=6;i>=0;i--){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-i); days.push(d.getTime()); }
@@ -1046,10 +1071,10 @@ function renderStats(){
   const cnts=days.map(d0=>D.feeds.filter(f=>f.ts>=d0&&f.ts<d0+86400000).length);
   const mxD=Math.max(...durs,1), mxC=Math.max(...cnts,1);
   const lb=d=>{const x=new Date(d);return `${x.getMonth()+1}/${x.getDate()}`};
-  document.getElementById('bars7').innerHTML=days.map((d,i)=>
-    `<div class="b"><div class="bar ${durs[i]===mxD&&mxD>0?'hi':''}" style="height:${Math.round(durs[i]/mxD*82)}px"></div><div class="lb">${lb(d)}</div></div>`).join('');
-  document.getElementById('barsN').innerHTML=days.map((d,i)=>
-    `<div class="b"><div class="bar ${cnts[i]===mxC&&mxC>0?'hi':''}" style="height:${Math.round(cnts[i]/mxC*82)}px"></div><div class="lb">${lb(d)}</div></div>`).join('');
+  setHtml('bars7',days.map((d,i)=>
+    `<div class="b"><div class="bar ${durs[i]===mxD&&mxD>0?'hi':''}" style="height:${Math.round(durs[i]/mxD*82)}px"></div><div class="lb">${lb(d)}</div></div>`).join(''));
+  setHtml('barsN',days.map((d,i)=>
+    `<div class="b"><div class="bar ${cnts[i]===mxC&&mxC>0?'hi':''}" style="height:${Math.round(cnts[i]/mxC*82)}px"></div><div class="lb">${lb(d)}</div></div>`).join(''));
 
   /* ---------- 喂养方式环形图 ---------- */
   const modeStat={breast:0,bottle:0,pump:0};
@@ -1065,20 +1090,19 @@ function renderStats(){
       segs+=`${MCOL[k]} ${acc.toFixed(2)}% ${(acc+pct).toFixed(2)}%,`;
       acc+=pct;
     });
-    document.getElementById('donut').style.background=`conic-gradient(${segs})`;
-    document.getElementById('donut').innerHTML=
-      `<div class="donut-center"><div>${Math.round(mTot/60)}<small style="font-size:9px;display:block;margin-top:1px">分钟</small></div></div>`;
-    document.getElementById('donutLegend').innerHTML=['breast','bottle','pump'].map(k=>{
+    setStyle('donut','background',`conic-gradient(${segs})`);
+    setHtml('donut',`<div class="donut-center"><div>${Math.round(mTot/60)}<small style="font-size:9px;display:block;margin-top:1px">分钟</small></div></div>`);
+    setHtml('donutLegend',['breast','bottle','pump'].map(k=>{
       const pct=mTot? Math.round(modeStat[k]/mTot*100):0;
       const mins=Math.round(modeStat[k]/60);
       return `<div class="lg-row"><span class="lg-dot" style="background:${MCOL[k]}"></span>
         <span class="lg-name">${MNAME[k]}</span>
         <span class="lg-val">${mins}分 <small style="color:var(--mut);font-weight:400">${pct}%</small></span></div>`;
-    }).join('');
+    }).join(''));
   } else {
-    document.getElementById('donut').style.background='var(--card2)';
-    document.getElementById('donut').innerHTML='<div class="donut-center">暂无<br>数据</div>';
-    document.getElementById('donutLegend').innerHTML='<div class="empty-s">还没有记录</div>';
+    setStyle('donut','background','var(--card2)');
+    setHtml('donut','<div class="donut-center">暂无<br>数据</div>');
+    setHtml('donutLegend','<div class="empty-s">还没有记录</div>');
   }
 
   /* ---------- 左右侧时长 ---------- */
@@ -1087,37 +1111,35 @@ function renderStats(){
   const lrTot=sumL+sumR;
   if(lrTot>0){
     const pL=Math.round(sumL/lrTot*100);
-    document.getElementById('lrBar').innerHTML=
-      `<div class="lr-seg" style="width:${pL}%;background:#F0A868">${pL}%</div>
-       <div class="lr-seg" style="width:${100-pL}%;background:#6BA8F5">${100-pL}%</div>`;
-    document.getElementById('lrTxt').innerHTML=
-      `<span>左侧 ${Math.round(sumL/60000)} 分钟</span><span>右侧 ${Math.round(sumR/60000)} 分钟</span>`;
+    setHtml('lrBar',`<div class="lr-seg" style="width:${pL}%;background:#F0A868">${pL}%</div>
+       <div class="lr-seg" style="width:${100-pL}%;background:#6BA8F5">${100-pL}%</div>`);
+    setHtml('lrTxt',`<span>左侧 ${Math.round(sumL/60000)} 分钟</span><span>右侧 ${Math.round(sumR/60000)} 分钟</span>`);
   } else {
-    document.getElementById('lrBar').innerHTML='<div class="lr-seg" style="width:100%;background:var(--card2);color:var(--mut)">暂无亲喂记录</div>';
-    document.getElementById('lrTxt').innerHTML='<span>左 0 分钟</span><span>右 0 分钟</span>';
+    setHtml('lrBar','<div class="lr-seg" style="width:100%;background:var(--card2);color:var(--mut)">暂无亲喂记录</div>');
+    setHtml('lrTxt','<span>左 0 分钟</span><span>右 0 分钟</span>');
   }
 
   /* ---------- 24 小时分布 ---------- */
   const hours=new Array(24).fill(0);
   D.feeds.forEach(f=>{ hours[new Date(f.ts).getHours()]+=1; });
   const hMax=Math.max.apply(null,hours.concat([1]));
-  document.getElementById('hourBars').innerHTML=hours.map((v,i)=>
+  setHtml('hourBars',hours.map((v,i)=>
     `<div class="h"><div class="hb ${v===hMax&&v>0?'hi':''}" style="height:${v>0?Math.max(4,Math.round(v/hMax*60)):2}px"></div>
-     ${i%3===0?`<div class="hl">${i}</div>`:'<div class="hl">&nbsp;</div>'}</div>`).join('');
+     ${i%3===0?`<div class="hl">${i}</div>`:'<div class="hl">&nbsp;</div>'}</div>`).join(''));
 
   /* ---------- 间隔统计 ---------- */
   const sorted=D.feeds.slice().sort((a,b)=>a.ts-b.ts);
   const allGaps=[];
   for(let i=1;i<sorted.length;i++) allGaps.push((sorted[i].ts-sorted[i-1].ts)/60000);
   const gArr=allGaps.length?allGaps:[0];
-  document.getElementById('statGap').innerHTML=[
+  setHtml('statGap',[
     ['最短间隔', allGaps.length?Math.round(Math.min.apply(null,allGaps)):0, '分'],
     ['最长间隔', allGaps.length?Math.round(Math.max.apply(null,allGaps)):0, '分'],
     ['中位间隔', allGaps.length?Math.round(allGaps.slice().sort((a,b)=>a-b)[Math.floor(allGaps.length/2)]):0, '分'],
     ['间隔≥3小时', allGaps.filter(g=>g>=180).length, '次'],
     ['夜间喂奶', D.feeds.filter(f=>{const h=new Date(f.ts).getHours();return h>=22||h<6;}).length, '次'],
     ['白天喂奶', D.feeds.filter(f=>{const h=new Date(f.ts).getHours();return h>=6&&h<22;}).length, '次']
-  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join(''));
 
   /* ---------- 累计 ---------- */
   const allDur=D.feeds.reduce((a,b)=>a+(b.dur||0),0);
@@ -1125,7 +1147,7 @@ function renderStats(){
   const daySet=new Set(D.feeds.map(f=>dayStart(f.ts)));
   const first=D.feeds.length?Math.min.apply(null,D.feeds.map(f=>f.ts)):0;
   const nDays=daySet.size;
-  document.getElementById('statAll').innerHTML=[
+  setHtml('statAll',[
     ['累计喂奶', D.feeds.length, '次'],
     ['累计时长', Math.round(allDur/60), '分'],
     ['累计奶量', allMl, 'ml'],
@@ -1134,7 +1156,7 @@ function renderStats(){
     ['尿布总数', D.diapers.length, '次'],
     ['体重记录', D.weights.length, '条'],
     ['最早记录', first?new Date(first).toLocaleDateString('zh-CN'):'—', '']
-  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join(''));
 
   /* ---------- 14 天趋势 ---------- */
   const t14=[], lb14=[];
@@ -1147,9 +1169,9 @@ function renderStats(){
   }
   const tMax=Math.max.apply(null,t14.concat([1]));
   const tMaxIdx=t14.indexOf(Math.max.apply(null,t14));
-  document.getElementById('trend14').innerHTML=t14.map((v,i)=>
+  setHtml('trend14',t14.map((v,i)=>
     `<div class="t"><div class="tb ${i===tMaxIdx&&v>0?'hi':''}" style="height:${v>0?Math.max(3,Math.round(v/tMax*58)):2}px"></div>
-     <div class="tl">${i%2===0?lb14[i]:''}</div></div>`).join('');
+     <div class="tl">${i%2===0?lb14[i]:''}</div></div>`).join(''));
 }
 
 /* ================= 交互 ================= */
@@ -1229,18 +1251,31 @@ function paintDiaperSel(){
 
 /* 点确认才真正写入 */
 function commitDiaper(){
-  if(!diaperSel){ bigToast('先选一种尿布类型'); return; }
-  addDiaper(diaperSel);
+  if(!diaperSel){ bigToast('请先选择一种尿布类型'); return; }
+  const t=diaperSel;
+  // ① 按钮立刻变「已记录」——用户点了马上看到按钮变化
+  const ok=document.getElementById('diaperOk');
+  if(ok){ ok.textContent='✓ 已记录'; ok.disabled=true; ok.style.opacity='1';
+          ok.style.background='var(--ok)'; ok.style.color='#0B1408'; }
+  // ② 无条件立刻关闭弹层（不管后面发生什么，窗口都会消失）
+  closeSheet();
+  buzz(20);
+  // ③ 再干活；万一出错也给用户明确提示
+  try{
+    addDiaper(t);
+  }catch(e){
+    console.error('记录尿布失败', e);
+    bigToast('记录失败：'+(e&&e.message?e.message:e));
+  }
 }
 function addDiaper(t){
   const label = t==='pee'?'💧 尿了': t==='poop'?'💩 大便':'💧💩 都有';
 
-  // ① 防重复：30 秒内同一类型不再记（防止连点手滑）
-  //    不同类型（尿了→大便）不拦，那是真实情况
+  // ① 防重复：同类型 60 秒内不重复记（不同类型不拦，那是真实情况）
   const sameList=D.diapers.filter(d=>d.type===t);
   const lastSame=sameList.length? sameList.reduce((a,b)=>a.ts>b.ts?a:b) : null;
   if(lastSame){
-    const ago=Math.floor((Date.now()-lastSame.ts)/1000);   // 秒
+    const ago=Math.floor((Date.now()-lastSame.ts)/1000);
     if(ago < DUP_WINDOW_SEC){
       closeSheet();                       // 立刻关窗
       buzz(30);
@@ -1249,21 +1284,28 @@ function addDiaper(t){
     }
   }
 
-  // ③ 记录
+  // ② 先写内存 + 立刻给用户反馈（关窗 + 成功提示），再做可能失败的持久化
+  //    顺序很重要：保存/渲染/上传任何一步报错，用户都已经看到「成功了」
   const rec={id:uid(),ts:Date.now(),type:t};
   D.diapers.unshift(rec);
-  save(); render(); pushCloud();
 
   const pee=D.diapers.filter(d=>d.ts>=today()&&(d.type==='pee'||d.type==='both')).length;
   const poo=D.diapers.filter(d=>d.ts>=today()&&(d.type==='poop'||d.type==='both')).length;
 
-  // ④ 点确认立刻关窗 + 底部大提示（带撤销）
-  closeSheet();
+  closeSheet();                                   // ← 立刻隐藏弹层
   buzz(22);
-  bigToast('✅ 已记录 '+label+'　今日 💧'+pee+' 💩'+poo, ()=>{
+  bigToast('✅ 已记录 '+label+'　今日 💧'+pee+' 💩'+poo, ()=>{   // ← 立刻给成功提示
     D.diapers=D.diapers.filter(d=>d.id!==rec.id);
-    save(); render(); pushCloud(); bigToast('已撤销');
+    try{ save(); }catch(e){ console.error(e); }
+    try{ render(); }catch(e){ console.error(e); }
+    try{ pushCloud(); }catch(e){ console.error(e); }
+    bigToast('已撤销');
   });
+
+  // ③ 最后才做持久化，每一步独立兜底，绝不影响上面的反馈
+  try{ save(); }catch(e){ console.error('save 失败', e); }
+  try{ render(); }catch(e){ console.error('render 失败', e); }
+  try{ pushCloud(); }catch(e){ console.error('pushCloud 失败', e); }
 }
 
 /* 按下的那个 chip 立刻变橙（按下瞬间就给反馈，不等网络） */
@@ -1301,7 +1343,7 @@ function openWeight(){
   if(el) setTimeout(()=>el.focus(),60);
 }
 function addWeight(){
-  const jin=Number(document.getElementById('wIn').value);
+  const jin=Number(document.getElementById('wIn')?.value||0);
   if(!jin || jin<=0){
     bigToast('请先填体重（斤）');
     return;
@@ -1320,32 +1362,42 @@ function addWeight(){
     }
   }
 
+  // 先写内存 + 立刻给反馈（关窗 + 提示），再做持久化
   const rec={id:uid(),ts:Date.now(),kg};
-  D.weights.unshift(rec); save(); render(); pushCloud();
+  D.weights.unshift(rec);
 
   closeSheet();                            // ← 点确认立刻关窗
   buzz(22);
   bigToast('✅ 已记录体重 '+jin+' 斤', ()=>{
     markDeleted('weight', rec.id);
     D.weights=D.weights.filter(w=>w.id!==rec.id);
-    save(); render(); pushNow(); bigToast('已撤销');
+    try{ save(); }catch(e){ console.error(e); }
+    try{ render(); }catch(e){ console.error(e); }
+    try{ pushNow(); }catch(e){ console.error(e); }
+    bigToast('已撤销');
   });
+
+  // 最后才持久化，每步独立兜底
+  try{ save(); }catch(e){ console.error('save 失败', e); }
+  try{ render(); }catch(e){ console.error('render 失败', e); }
+  try{ pushCloud(); }catch(e){ console.error('pushCloud 失败', e); }
 }
+/* 回填设置项：每个元素都做存在性判断，任何一个缺失都不能抛错 */
 function fillSettings(){
+  const setVal=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  const setTxt=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
   // 只在「不正在编辑」时才回填，避免用户输入被冲掉
   const inp=document.getElementById('setName');
   if(inp && document.activeElement!==inp) inp.value=S.name||'';
-  document.getElementById('setGap').value=S.gapMin||180;
-  document.getElementById('setQ1').value=S.q1??22;
-  document.getElementById('setQ2').value=S.q2??6;
-  document.getElementById('setSide').value=S.sideMin||12;
-  document.getElementById('notifyBtn').textContent = Notification.permission==='granted'?'已开启':'开启';
+  setVal('setGap', S.gapMin||180);
+  setVal('setQ1', S.q1??22);
+  setVal('setQ2', S.q2??6);
+  setVal('setSide', S.sideMin||12);
+  setTxt('notifyBtn', (typeof Notification!=='undefined' && Notification.permission==='granted')?'已开启':'开启');
   // 主题选中态
-  paintThemeSeg();
-  const vb=document.getElementById('verBtn');
-  if(vb) vb.textContent=APP_VER;
-  const sb=document.getElementById('shareBabyBtn');
-  if(sb) sb.textContent = '分享「'+(S.name||'宝宝')+'」';
+  try{ paintThemeSeg(); }catch(e){ console.error('paintThemeSeg 失败', e); }
+  setTxt('verBtn', APP_VER);
+  setTxt('shareBabyBtn', '分享「'+(S.name||'宝宝')+'」');
 }
 
 /* ---------- 名字：确认后才保存 ---------- */
@@ -1453,7 +1505,13 @@ function applyTheme(){
   paintThemeSeg();
 }
 
-function save(){ localStorage.setItem(KEY, JSON.stringify(D)); fillSettings(); }
+/* 保存：任何一步失败都不能影响业务流程（记录必须先落库再谈别的） */
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(D)); }
+  catch(e){ console.error('localStorage 保存失败', e); }
+  try{ fillSettings(); }
+  catch(e){ console.error('fillSettings 失败', e); }
+}
 
 /* ================= 云端同步（按宝宝档案名分桶） ================= */
 let cloudBusy=false, cloudMsg='';
@@ -1682,10 +1740,15 @@ function bigToast(msg, undoFn, ms, delayMs){
     txt.textContent=msg;
     __undoFn = typeof undoFn==='function' ? undoFn : null;
     btn.style.display = __undoFn ? '' : 'none';
+    // 成功提示用绿色描边，错误用红色，普通用橙色 —— 一眼分清
+    const isErr=/^出错了|^记录失败|^⏱/.test(msg);
+    const isOk=/^✅|^已记录|^已撤销/.test(msg);
+    box.classList.toggle('ok', isOk && !isErr);
+    box.classList.toggle('err', isErr);
     box.classList.add('on');
     buzz(18);
     clearTimeout(bigToastTimer);
-    bigToastTimer=setTimeout(hideBigToast, ms||4000);
+    bigToastTimer=setTimeout(hideBigToast, ms||5000);
   };
   clearTimeout(bigToastTimer);
   if(delayMs) setTimeout(show, delayMs);
@@ -1822,9 +1885,10 @@ function dl(blob,name){
 
 /* ================= 提醒 ================= */
 setInterval(()=>{
-  accrue();          // 每秒结算，保证时长精确不丢
-  render();
-  checkNotify();
+  // 每一步独立兜底：任何一块出错都不能影响其它块，更不能刷屏报��
+  try{ accrue(); }catch(e){ console.error('accrue 失败', e); }   // 每秒结算，保证时长精确不丢
+  try{ render(); }catch(e){ console.error('render 失败', e); }
+  try{ checkNotify(); }catch(e){ console.error('checkNotify 失败', e); }
 },1000);
 
 function checkNotify(){
@@ -1854,6 +1918,33 @@ render();
 (function(){ const vb=document.getElementById('verBtn'); if(vb) vb.textContent=APP_VER; })();
 
 /* 启动时：如果本地有档案名，自动拉一次云端（拿到别人刚记的） */
+
+/* ============================================================
+   全局错误捕获：任何未捕获异常都立刻告诉用户
+   —— 宁可弹一个错误提示，也不要「点了没反应」让人猜
+   ============================================================ */
+(function(){
+  // 同一个错误 10 秒内只提示一次，避免定时任务把提示刷屏
+  const seen={};
+  function report(msg){
+    console.error('[feed-timer]', msg);
+    const key=String(msg).slice(0,60);
+    const now=Date.now();
+    if(seen[key] && now-seen[key] < 10000) return;
+    seen[key]=now;
+    try{
+      if(typeof bigToast==='function'){
+        bigToast('出错了：'+key, null, 5000);
+      }
+    }catch(_){}
+  }
+  window.addEventListener('error', function(e){
+    report((e.error&&e.error.message)||e.message||'未知错误');
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    report((e.reason&&(e.reason.message||e.reason))||'异步任务失败');
+  });
+})();
 
 (async function boot(){
   // ① 链接带 ?baby=名字 → 直接用该档案（家人点分享链接走这里）
@@ -1923,7 +2014,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v29';
+  var APP_VER='v30';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
