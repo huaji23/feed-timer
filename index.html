@@ -475,7 +475,7 @@ body.selecting #v-log{padding-bottom:150px}
         </div>
         <div class="fld">
           <div class="k">版本<small>显示不对就点这里强制更新</small></div>
-          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v12</button>
+          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v13</button>
         </div>
         <div class="fld">
           <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
@@ -508,7 +508,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v12';
+const APP_VER='v13';
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
 const CLOUD_KEY='feedtimer.cloud.v1';  // 本地记住用过的档案
@@ -1077,11 +1077,17 @@ function openDiaper(){
 function addDiaper(t){
   const label = t==='pee'?'💧 尿了': t==='poop'?'💩 大便':'💧💩 都有';
 
-  // 防重复：8 秒内同一类型不再记（防止连点）
-  if(tooSoon(D.diapers, d=>d.type===t)){
-    closeSheet();
-    bigToast('刚刚已记过「'+label+'」，这次忽略');
-    return;
+  // 防重复：30 秒内同一类型不再记（防止连点手滑）
+  // 不同类型（尿了→大便）不拦，那是真实情况
+  const lastSame=D.diapers.find(d=>d.type===t);
+  if(lastSame){
+    const ago=Math.floor((Date.now()-lastSame.ts)/1000);
+    if(ago < DUP_WINDOW_MS){
+      closeSheet();
+      const wait=DUP_WINDOW_MS-ago;
+      bigToast('⏱ 刚记过「'+label+'」，'+wait+' 秒内不能重复记');
+      return;
+    }
   }
 
   const rec={id:uid(),ts:Date.now(),type:t};
@@ -1104,8 +1110,14 @@ function openWeight(){
 function addWeight(){
   const kg=Number(document.getElementById('wIn').value);
   if(!kg) return;
-  if(tooSoon(D.weights, w=>Math.abs(w.kg-kg)<0.001)){
-    closeSheet(); bigToast('刚刚已记过 '+kg+' kg，这次忽略'); return;
+  const lastW=D.weights[0];
+  if(lastW && Math.abs(lastW.kg-kg)<0.001){
+    const ago=Math.floor((Date.now()-lastW.ts)/1000);
+    if(ago < DUP_WINDOW_MS){
+      closeSheet();
+      bigToast('⏱ 刚记过 '+kg+' kg，'+(DUP_WINDOW_MS-ago)+' 秒内不能重复记');
+      return;
+    }
   }
   const rec={id:uid(),ts:Date.now(),kg};
   D.weights.unshift(rec); save(); closeSheet(); render(); pushCloud();
@@ -1174,11 +1186,16 @@ function paintThemeSeg(){
   btns.forEach(b=>{
     const on=(b.dataset.t||'dark')===cur;
     b.classList.toggle('on', on);
-    b.style.background = on ? 'rgba(240,168,104,.16)' : 'transparent';
-    b.style.color = on ? 'var(--acc)' : 'var(--mut)';
+    // 选中：实心橙底 + 深色字 + 橙边（和「母乳」按钮一样的强度，看得出来）
+    b.style.background = on ? 'var(--acc)' : 'var(--card)';
+    b.style.color = on ? '#1A1208' : 'var(--mut)';
     b.style.borderColor = on ? 'var(--acc)' : 'var(--line)';
-    b.style.fontWeight = on ? '600' : '400';
-    b.style.boxShadow = on ? '0 0 0 1px var(--acc) inset' : 'none';
+    b.style.fontWeight = on ? '700' : '400';
+    b.style.boxShadow = on ? '0 0 0 1.5px var(--acc)' : 'none';
+    b.style.transform = on ? 'scale(1.02)' : 'scale(1)';
+    // 打勾标记，一眼看出选了哪个
+    const label=b.dataset.t==='dark'?'深色': b.dataset.t==='light'?'浅色':'护眼';
+    b.textContent = (on ? '✓ ' : '') + label;
   });
 }
 
@@ -1402,7 +1419,8 @@ function __toastUndo(){
 }
 
 /* 防重复：同一类型 N 秒内只记一次 */
-const DUP_WINDOW_MS = 8000;
+const DUP_WINDOW_MS = 30000;   // 30 秒内同类型不重复记
+const DUP_WINDOW_FEED = 10000; // 喂奶 10 秒
 function tooSoon(list, matchFn){
   const now=Date.now();
   return (list||[]).some(x=>now-x.ts < DUP_WINDOW_MS && matchFn(x));
