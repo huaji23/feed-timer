@@ -222,6 +222,14 @@ input,select{font:inherit;color:inherit}
 body.selecting .nav{opacity:.35;pointer-events:none}
 body.selecting #v-log{padding-bottom:150px}
 
+/* 弹层成功/提示画面 */
+.sheet-msg{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:44px 24px 52px;text-align:center;animation:smPop .26s cubic-bezier(.2,1.4,.4,1)}
+.sm-icon{font-size:52px;line-height:1;margin-bottom:12px}
+.sm-title{font-size:19px;font-weight:700;color:var(--tx);margin-bottom:5px}
+.sm-sub{font-size:14px;color:var(--mut)}
+@keyframes smPop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+
 /* 操作反馈条 */
 .toast{
   position:fixed;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom,0px));
@@ -230,7 +238,7 @@ body.selecting #v-log{padding-bottom:150px}
   padding:14px 16px;z-index:300;
   box-shadow:0 8px 28px rgba(0,0,0,.45);
   transform:translateY(160%) scale(.94);opacity:0;pointer-events:none;
-  transition:transform .28s cubic-bezier(.2,1.3,.4,1),opacity .2s ease;
+  transition:transform .28s cubic-bezier(.2,1.3,.4,1),opacity .2s ease,bottom .22s ease;
   box-shadow:0 10px 36px rgba(0,0,0,.55), 0 0 0 1px rgba(240,168,104,.25);
 }
 .toast.on{transform:translateY(0) scale(1);opacity:1;pointer-events:auto}
@@ -508,7 +516,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v15';
+const APP_VER='v16';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1064,8 +1072,18 @@ function delFeed(id){
   D.feeds=D.feeds.filter(f=>f.id!==id); save(); render(); pushCloud();
   bigToast('已删除 1 条');
 }
-function openSheet(html){ document.getElementById('panel').innerHTML=html; document.getElementById('sheet').classList.add('on'); }
-function closeSheet(){ document.getElementById('sheet').classList.remove('on'); }
+function openSheet(html){
+  document.getElementById('panel').innerHTML=html;
+  document.getElementById('sheet').classList.add('on');
+  // 弹层开着时 toast 往下让位，别挡住弹层内容
+  const t=document.getElementById('toast');
+  if(t) t.style.bottom='calc(12px + env(safe-area-inset-bottom,0px))';
+}
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('on');
+  const t=document.getElementById('toast');
+  if(t) t.style.bottom='';
+}
 function openDiaper(){
   openSheet(`<h3>尿布记录</h3>
     <div class="chips">
@@ -1078,30 +1096,66 @@ function openDiaper(){
 function addDiaper(t){
   const label = t==='pee'?'💧 尿了': t==='poop'?'💩 大便':'💧💩 都有';
 
-  // 防重复：30 秒内同一类型不再记（防止连点手滑）
-  // 不同类型（尿了→大便）不拦，那是真实情况
-  // 取所有同类型里最新的那条
+  // ① 立刻给按钮反馈：按下的那个变橙 + 震动（不等网络）
+  flashChip(t);
+
+  // ② 防重复：30 秒内同一类型不再记（防止连点手滑）
+  //    不同类型（尿了→大便）不拦，那是真实情况
   const sameList=D.diapers.filter(d=>d.type===t);
   const lastSame=sameList.length? sameList.reduce((a,b)=>a.ts>b.ts?a:b) : null;
   if(lastSame){
     const ago=Math.floor((Date.now()-lastSame.ts)/1000);   // 秒
     if(ago < DUP_WINDOW_SEC){
-      closeSheet();
-      bigToast('⏱ 刚记过「'+label+'」，还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
+      sheetMsg('⏱','刚记过「'+label+'」','还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
+      buzz(30);
+      setTimeout(()=>closeSheet(), 1400);
       return;
     }
   }
 
+  // ③ 记录
   const rec={id:uid(),ts:Date.now(),type:t};
   D.diapers.unshift(rec);
-  save(); closeSheet(); render(); pushCloud();
+  save(); render(); pushCloud();
 
   const pee=D.diapers.filter(d=>d.ts>=today()&&(d.type==='pee'||d.type==='both')).length;
   const poo=D.diapers.filter(d=>d.ts>=today()&&(d.type==='poop'||d.type==='both')).length;
+
+  // ④ 弹层显示「记录成功」，1.2 秒后自动关
+  sheetMsg('✅','已记录 '+label,'今日 💧'+pee+' 💩'+poo);
+  buzz(22);
+  setTimeout(()=>closeSheet(), 1200);
+
+  // ⑤ 底部 toast（等弹层关掉再出，避免遮挡）+ 撤销
   bigToast('✅ 已记录 '+label+'　今日 💧'+pee+' 💩'+poo, ()=>{
     D.diapers=D.diapers.filter(d=>d.id!==rec.id);
     save(); render(); pushCloud(); bigToast('已撤销');
-  });
+  }, 4000, 1400);
+}
+
+/* 按下的那个 chip 立刻变橙（按下瞬间就给反馈，不等网络） */
+const CHIP_IDX={pee:0, poop:1, both:2};
+function flashChip(t){
+  const btns=[...document.querySelectorAll('#panel .chips button')];
+  const target=btns[CHIP_IDX[t] ?? 0];
+  if(!target) return;
+  target.style.background='var(--acc)';
+  target.style.color='#1A1208';
+  target.style.borderColor='var(--acc)';
+  target.style.transform='scale(.93)';
+  target.style.fontWeight='700';
+  setTimeout(()=>{ target.style.transform='scale(1)'; },150);
+}
+
+/* 弹层变成成功/提示画面 */
+function sheetMsg(icon, title, sub){
+  const panel=document.getElementById('panel');
+  if(!panel) return;
+  panel.innerHTML=`<div class="sheet-msg">
+      <div class="sm-icon">${icon}</div>
+      <div class="sm-title">${title}</div>
+      ${sub?`<div class="sm-sub">${sub}</div>`:''}
+    </div>`;
 }
 function openWeight(){
   openSheet(`<h3>记录体重</h3>
@@ -1116,17 +1170,21 @@ function addWeight(){
   if(lastW && Math.abs(lastW.kg-kg)<0.001){
     const ago=Math.floor((Date.now()-lastW.ts)/1000);
     if(ago < DUP_WINDOW_SEC){
-      closeSheet();
-      bigToast('⏱ 刚记过 '+kg+' kg，还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
+      sheetMsg('⏱','刚记过 '+kg+' kg','还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
+      buzz(30);
+      setTimeout(()=>closeSheet(), 1400);
       return;
     }
   }
   const rec={id:uid(),ts:Date.now(),kg};
-  D.weights.unshift(rec); save(); closeSheet(); render(); pushCloud();
+  D.weights.unshift(rec); save(); render(); pushCloud();
+  sheetMsg('✅','已记录体重', kg+' kg');
+  buzz(22);
+  setTimeout(()=>closeSheet(), 1200);
   bigToast('✅ 已记录体重 '+kg+' kg', ()=>{
     D.weights=D.weights.filter(w=>w.id!==rec.id);
     save(); render(); pushCloud(); bigToast('已撤销');
-  });
+  }, 4000, 1400);
 }
 function fillSettings(){
   // 只在「不正在编辑」时才回填，避免用户输入被冲掉
@@ -1402,18 +1460,23 @@ function showToast(m, ms){
 
 /* 大反馈条：操作成功用这个，带「撤销」 */
 let bigToastTimer=null, __undoFn=null;
-function bigToast(msg, undoFn, ms){
+function bigToast(msg, undoFn, ms, delayMs){
   const box=document.getElementById('toast');
   const txt=document.getElementById('toastMsg');
   const btn=document.getElementById('toastUndo');
   if(!box||!txt) return;
-  txt.textContent=msg;
-  __undoFn = typeof undoFn==='function' ? undoFn : null;
-  btn.style.display = __undoFn ? '' : 'none';
-  box.classList.add('on');
-  buzz(18);
+  const show=()=>{
+    txt.textContent=msg;
+    __undoFn = typeof undoFn==='function' ? undoFn : null;
+    btn.style.display = __undoFn ? '' : 'none';
+    box.classList.add('on');
+    buzz(18);
+    clearTimeout(bigToastTimer);
+    bigToastTimer=setTimeout(hideBigToast, ms||4000);
+  };
   clearTimeout(bigToastTimer);
-  bigToastTimer=setTimeout(hideBigToast, ms||4000);
+  if(delayMs) setTimeout(show, delayMs);
+  else show();
 }
 function hideBigToast(){
   const box=document.getElementById('toast');
