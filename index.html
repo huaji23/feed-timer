@@ -186,6 +186,47 @@ input,select{font:inherit;color:inherit}
 .stats .stat .v small{font-size:11px;font-weight:400;color:var(--mut);margin-left:3px}
 
 
+/* 记录页头部 + 多选 */
+.hdr-row{display:flex;align-items:center;justify-content:space-between;padding:0 20px 10px}
+.hdr-row h2{padding:0;margin:0}
+.mini-btn{background:var(--card2);border:1px solid var(--line);color:var(--tx);
+  border-radius:10px;padding:7px 14px;font-size:13px}
+.mini-btn.on{border-color:var(--acc);color:var(--acc)}
+
+.selbar{
+  position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));
+  display:none;align-items:center;gap:8px;padding:10px 12px;z-index:260;
+  background:var(--card2);border-top:1px solid var(--line);
+}
+.selbar.on{display:flex}
+.selbar span{flex:1;font-size:13.5px;color:var(--tx);font-weight:600}
+.selbar button{background:var(--card);border:1px solid var(--line);color:var(--tx);
+  border-radius:10px;padding:8px 12px;font-size:13px}
+.selbar button.danger{border-color:var(--warn);color:var(--warn);font-weight:600}
+.row.sel{background:rgba(240,168,104,.12);border-radius:10px}
+.row .ck{width:20px;height:20px;flex:none;border-radius:6px;border:1.5px solid var(--line);
+  display:grid;place-items:center;font-size:12px;color:transparent;margin-right:2px}
+.row.sel .ck{background:var(--acc);border-color:var(--acc);color:#1a1208}
+body.selecting .nav{opacity:.35;pointer-events:none}
+body.selecting #v-log{padding-bottom:150px}
+
+/* 操作反馈条 */
+.toast{
+  position:fixed;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom,0px));
+  display:flex;align-items:center;gap:10px;
+  background:var(--card2);border:1px solid var(--acc);border-radius:14px;
+  padding:14px 16px;z-index:300;
+  box-shadow:0 8px 28px rgba(0,0,0,.45);
+  transform:translateY(140%);opacity:0;pointer-events:none;
+  transition:transform .22s ease,opacity .22s ease;
+}
+.toast.on{transform:translateY(0);opacity:1;pointer-events:auto}
+.toast span{flex:1;font-size:14.5px;color:var(--tx);line-height:1.35;font-weight:500}
+.toast button{
+  flex:none;background:transparent;border:1px solid var(--acc);color:var(--acc);
+  border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;
+}
+
 /* 档案切换 chips */
 .chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 14px}
 .chips .chip{
@@ -281,9 +322,20 @@ input,select{font:inherit;color:inherit}
   <!-- ===== 记录 ===== -->
   <div class="view" id="v-log">
     <div class="sec" style="padding-top:16px">
-      <h2>全部记录</h2>
+      <div class="hdr-row">
+        <h2 style="padding:0">全部记录</h2>
+        <button class="mini-btn" id="selToggle" onclick="toggleSelect()">批量</button>
+      </div>
       <div class="card" id="logAll"></div>
     </div>
+  </div>
+
+  <!-- 多选操作条 -->
+  <div class="selbar" id="selBar">
+    <span id="selCount">已选 0 条</span>
+    <button onclick="selToday()">全选本日</button>
+    <button onclick="selAll()">全选</button>
+    <button class="danger" onclick="delSelected()">删除</button>
   </div>
 
   <!-- ===== 统计 ===== -->
@@ -404,6 +456,9 @@ input,select{font:inherit;color:inherit}
     </div>
   </div>
 
+  <!-- 操作反馈条 -->
+  <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo" onclick="__toastUndo()">撤销</button></div>
+
   <div class="nav">
     <button class="on" data-v="timer" onclick="go('timer')"><span class="ic">⏱</span>计时</button>
     <button data-v="log" onclick="go('log')"><span class="ic">📋</span>记录</button>
@@ -487,11 +542,14 @@ function endSession(){
   if(sess.mode==='pump'||sess.mode==='bottle') rec.ml=sess.ml||0;
   const keep = (rec.dur>=1 || rec.ml>0);
   if(keep) D.feeds.unshift(rec);
-  sess=null; saveSess(); buzz(24); render(); save(); pushCloud();
+  sess=null; saveSess(); render(); save(); pushCloud();
   if(keep){
-    showToast('已记录 '+hhmm(rec.dur) + (rec.ml?(' · '+rec.ml+'ml'):''), 2400);
+    bigToast('✅ 已记录 '+hhmm(rec.dur) + (rec.ml?(' · '+rec.ml+'ml'):''), ()=>{
+      D.feeds=D.feeds.filter(f=>f.id!==rec.id);
+      save(); render(); pushCloud(); bigToast('已撤销');
+    });
   }else{
-    showToast('时长太短，没记录', 2400);
+    bigToast('时长太短，没记录');
   }
 }
 function setSide(s){
@@ -637,6 +695,66 @@ function renderRecent(){
       <div class="d">${hhmmss(f.dur||0)}</div></div>`;
   }).join('') : `<div class="empty">还没有记录 · 点上面大圆开始</div>`;
 }
+/* ================= 多选删除 ================= */
+let selectMode=false;
+const selected=new Set();
+function rowKey(kind,id){ return kind+':'+id; }
+
+function toggleSelect(){
+  selectMode=!selectMode; selected.clear();
+  const b=document.getElementById('selToggle');
+  if(b){ b.textContent = selectMode?'取消':'批量'; b.classList.toggle('on', selectMode); }
+  document.body.classList.toggle('selecting', selectMode);
+  renderLog(); updateSelBar();
+}
+function rowTap(kind,id){
+  if(selectMode){
+    const k=rowKey(kind,id);
+    if(selected.has(k)) selected.delete(k); else selected.add(k);
+    renderLog(); updateSelBar(); buzz(8);
+    return;
+  }
+  if(kind==='feed') delFeed(id);
+  else if(kind==='diaper') delDiaper(id);
+  else delWeight(id);
+}
+function updateSelBar(){
+  const bar=document.getElementById('selBar');
+  if(bar) bar.classList.toggle('on', selectMode);
+  const c=document.getElementById('selCount');
+  if(c) c.textContent='已选 '+selected.size+' 条';
+}
+function selToday(){
+  const t0=today();
+  D.feeds.forEach(f=>{ if(f.ts>=t0) selected.add(rowKey('feed',f.id)); });
+  D.diapers.forEach(d=>{ if(d.ts>=t0) selected.add(rowKey('diaper',d.id)); });
+  D.weights.forEach(w=>{ if(w.ts>=t0) selected.add(rowKey('weight',w.id)); });
+  renderLog(); updateSelBar();
+}
+function selAll(){
+  D.feeds.forEach(f=>selected.add(rowKey('feed',f.id)));
+  D.diapers.forEach(d=>selected.add(rowKey('diaper',d.id)));
+  D.weights.forEach(w=>selected.add(rowKey('weight',w.id)));
+  renderLog(); updateSelBar();
+}
+function delSelected(){
+  const n=selected.size;
+  if(!n){ bigToast('还没选任何记录'); return; }
+  if(!confirm('删除选中的 '+n+' 条记录？删了不能恢复')) return;
+  const ids={feed:new Set(),diaper:new Set(),weight:new Set()};
+  selected.forEach(k=>{ const i=k.indexOf(':'); ids[k.slice(0,i)].add(k.slice(i+1)); });
+  D.feeds=D.feeds.filter(f=>!ids.feed.has(f.id));
+  D.diapers=D.diapers.filter(d=>!ids.diaper.has(d.id));
+  D.weights=D.weights.filter(w=>!ids.weight.has(w.id));
+  selected.clear(); selectMode=false;
+  const b=document.getElementById('selToggle');
+  if(b){ b.textContent='批量'; b.classList.remove('on'); }
+  document.body.classList.remove('selecting');
+  updateSelBar();
+  save(); render(); pushCloud();
+  bigToast('已删除 '+n+' 条');
+}
+
 function renderLog(){
   const box=document.getElementById('logAll');
   const total=D.feeds.length+D.diapers.length+D.weights.length;
@@ -676,7 +794,9 @@ function renderLog(){
         const idx=feedTs.indexOf(f.ts);
         const prev=idx>=0 && idx<feedTs.length-1 ? feedTs[idx+1] : null;
         const gap=prev? hhmm((f.ts-prev)/1000):'';
-        return `<div class="row" onclick="delFeed('${f.id}')">
+        const sel = selectMode && selected.has(rowKey('feed',f.id));
+        return `<div class="row${sel?' sel':''}" onclick="rowTap('feed','${f.id}')">
+          ${selectMode?'<div class="ck">✓</div>':''}
           <div class="t">${t}</div>
           <div class="m"><div class="a">${d.a}</div>
             <div class="b">${d.b||''}${gap?' · 距上次 '+gap:''}</div></div>
@@ -685,13 +805,17 @@ function renderLog(){
       if(e.kind==='diaper'){
         const dd=e.o;
         const lbl = dd.type==='poop'?'💩 大便': dd.type==='both'?'💧💩 尿了+大便':'💧 尿了';
-        return `<div class="row" onclick="delDiaper('${dd.id}')">
+        const sel = selectMode && selected.has(rowKey('diaper',dd.id));
+        return `<div class="row${sel?' sel':''}" onclick="rowTap('diaper','${dd.id}')">
+          ${selectMode?'<div class="ck">✓</div>':''}
           <div class="t">${t}</div>
           <div class="m"><div class="a">${lbl}</div><div class="b">尿布</div></div>
           <div class="d"></div></div>`;
       }
       const w=e.o;
-      return `<div class="row" onclick="delWeight('${w.id}')">
+      const selW = selectMode && selected.has(rowKey('weight',w.id));
+      return `<div class="row${selW?' sel':''}" onclick="rowTap('weight','${w.id}')">
+        ${selectMode?'<div class="ck">✓</div>':''}
         <div class="t">${t}</div>
         <div class="m"><div class="a">⚖ 体重</div><div class="b">${w.kg} kg</div></div>
         <div class="d"></div></div>`;
@@ -861,11 +985,25 @@ function openDiaper(){
     <div class="actions"><button onclick="closeSheet()">取消</button></div>`);
 }
 function addDiaper(t){
-  D.diapers.unshift({id:uid(),ts:Date.now(),type:t});
-  save(); closeSheet(); buzz(14); render(); pushCloud();
   const label = t==='pee'?'💧 尿了': t==='poop'?'💩 大便':'💧💩 都有';
-  showToast('已记录 '+label+' · 今日 💧'+D.diapers.filter(d=>d.ts>=today()&&(d.type==='pee'||d.type==='both')).length
-            +' 💩'+D.diapers.filter(d=>d.ts>=today()&&(d.type==='poop'||d.type==='both')).length, 2400);
+
+  // 防重复：8 秒内同一类型不再记（防止连点）
+  if(tooSoon(D.diapers, d=>d.type===t)){
+    closeSheet();
+    bigToast('刚刚已记过「'+label+'」，这次忽略');
+    return;
+  }
+
+  const rec={id:uid(),ts:Date.now(),type:t};
+  D.diapers.unshift(rec);
+  save(); closeSheet(); render(); pushCloud();
+
+  const pee=D.diapers.filter(d=>d.ts>=today()&&(d.type==='pee'||d.type==='both')).length;
+  const poo=D.diapers.filter(d=>d.ts>=today()&&(d.type==='poop'||d.type==='both')).length;
+  bigToast('✅ 已记录 '+label+'　今日 💧'+pee+' 💩'+poo, ()=>{
+    D.diapers=D.diapers.filter(d=>d.id!==rec.id);
+    save(); render(); pushCloud(); bigToast('已撤销');
+  });
 }
 function openWeight(){
   openSheet(`<h3>记录体重</h3>
@@ -876,8 +1014,15 @@ function openWeight(){
 function addWeight(){
   const kg=Number(document.getElementById('wIn').value);
   if(!kg) return;
-  D.weights.unshift({id:uid(),ts:Date.now(),kg}); save(); closeSheet(); buzz(14); render(); pushCloud();
-  showToast('已记录体重 '+kg+' kg', 2400);
+  if(tooSoon(D.weights, w=>Math.abs(w.kg-kg)<0.001)){
+    closeSheet(); bigToast('刚刚已记过 '+kg+' kg，这次忽略'); return;
+  }
+  const rec={id:uid(),ts:Date.now(),kg};
+  D.weights.unshift(rec); save(); closeSheet(); render(); pushCloud();
+  bigToast('✅ 已记录体重 '+kg+' kg', ()=>{
+    D.weights=D.weights.filter(w=>w.id!==rec.id);
+    save(); render(); pushCloud(); bigToast('已撤销');
+  });
 }
 function fillSettings(){
   // 只在「不正在编辑」时才回填，避免用户输入被冲掉
@@ -1113,12 +1258,43 @@ function linkFor(name){
   return name ? base + '?baby=' + encodeURIComponent(name) : base;
 }
 
-/* 轻提示 */
+/* 轻提示（顶栏灰字，用于同步状态这类弱信息） */
 let toastTimer=null;
 function showToast(m, ms){
   cloudMsg=m; render();
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{ cloudMsg=''; render(); }, ms||2600);
+}
+
+/* 大反馈条：操作成功用这个，带「撤销」 */
+let bigToastTimer=null, __undoFn=null;
+function bigToast(msg, undoFn, ms){
+  const box=document.getElementById('toast');
+  const txt=document.getElementById('toastMsg');
+  const btn=document.getElementById('toastUndo');
+  if(!box||!txt) return;
+  txt.textContent=msg;
+  __undoFn = typeof undoFn==='function' ? undoFn : null;
+  btn.style.display = __undoFn ? '' : 'none';
+  box.classList.add('on');
+  buzz(16);
+  clearTimeout(bigToastTimer);
+  bigToastTimer=setTimeout(hideBigToast, ms||6000);
+}
+function hideBigToast(){
+  const box=document.getElementById('toast');
+  if(box) box.classList.remove('on');
+  __undoFn=null;
+}
+function __toastUndo(){
+  if(__undoFn){ const f=__undoFn; __undoFn=null; f(); }
+}
+
+/* 防重复：同一类型 N 秒内只记一次 */
+const DUP_WINDOW_MS = 8000;
+function tooSoon(list, matchFn){
+  const now=Date.now();
+  return (list||[]).some(x=>now-x.ts < DUP_WINDOW_MS && matchFn(x));
 }
 
 /* 复制到剪贴板（含降级方案） */
