@@ -444,8 +444,15 @@ let mode='breast', curSide='L', lastNotified=0;
 /* ================= 工具 ================= */
 const pad=n=>String(n).padStart(2,'0');
 const hhmmss=sec=>{sec=Math.max(0,Math.floor(sec));return `${pad(Math.floor(sec/60))}:${pad(sec%60)}`};
-const hhmm=sec=>{sec=Math.max(0,Math.floor(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60);
-  return h?`${h}小时${pad(m)}分`:`${m}分钟`};
+/* 时长格式：<1分钟显示秒，避免「0分钟」看着像没记 */
+const hhmm=sec=>{
+  sec=Math.max(0,Math.floor(sec||0));
+  if(sec<60) return sec+'秒';
+  const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s2=sec%60;
+  if(h) return `${h}小时${pad(m)}分`;
+  if(s2 && m<10) return `${m}分${s2}秒`;
+  return `${m}分钟`;
+};
 const clock=ts=>{const d=new Date(ts);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
 const dayKey=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -478,8 +485,14 @@ function endSession(){
   const rec={id:uid(),ts:sess.start,dur:Math.round(total/1000),mode:sess.mode};
   if(sess.mode==='breast'){ rec.L=sess.sides.L; rec.R=sess.sides.R; }  // 毫秒
   if(sess.mode==='pump'||sess.mode==='bottle') rec.ml=sess.ml||0;
-  if(rec.dur>=1 || rec.ml){ D.feeds.unshift(rec); }
+  const keep = (rec.dur>=1 || rec.ml>0);
+  if(keep) D.feeds.unshift(rec);
   sess=null; saveSess(); buzz(24); render(); save(); pushCloud();
+  if(keep){
+    showToast('已记录 '+hhmm(rec.dur) + (rec.ml?(' · '+rec.ml+'ml'):''), 2400);
+  }else{
+    showToast('时长太短，没记录', 2400);
+  }
 }
 function setSide(s){
   if(!sess){ curSide=s; render(); return; }        // 未开始：预选起始侧
@@ -519,8 +532,13 @@ function render(){
   const last = D.feeds[0];
   const tf = D.feeds.filter(f=>f.ts>=today());
   const tfDur = tf.reduce((a,b)=>a+(b.dur||0),0);
+  const tdD = D.diapers.filter(d=>d.ts>=today());
+  const tdPee = tdD.filter(d=>d.type==='pee'||d.type==='both').length;
+  const tdPoo = tdD.filter(d=>d.type==='poop'||d.type==='both').length;
   document.getElementById('topSub').textContent =
-    (last? `距上次 ${hhmm((Date.now()-last.ts)/1000)} · `:'') + `今日 ${tf.length} 次 / ${hhmm(tfDur)}`
+    (last? `距上次 ${hhmm((Date.now()-last.ts)/1000)} · `:'')
+    + `今日 ${tf.length} 次 / ${hhmm(tfDur)}`
+    + (tdPee||tdPoo ? ` · 💧${tdPee}${tdPoo?' 💩'+tdPoo:''}` : '')
     + (cloudMsg? ` · ${cloudMsg}`:'');
 
   // 模式段
@@ -602,9 +620,9 @@ function pickMl(v,el){ document.getElementById('mlInput').value=v; mlBox.querySe
 
 function feedDesc(f){
   if(f.mode==='breast'){
-    const L=Math.round((f.L||0)/60000), R=Math.round((f.R||0)/60000);  // 毫秒 → 分钟
-    const dur=Math.round((f.dur||0)/60);
-    return {a:'母乳亲喂', b:`左 ${L}分 · 右 ${R}分 · 共 ${dur}分`};
+    const L=hhmm((f.L||0)/1000), R=hhmm((f.R||0)/1000);
+    const dur=hhmm(f.dur||0);
+    return {a:'母乳亲喂', b:`左 ${L} · 右 ${R} · 共 ${dur}`};
   }
   if(f.mode==='pump') return {a:'吸奶', b:(f.ml?f.ml+' 毫升':'')};
   return {a:'瓶喂', b:(f.ml?f.ml+' 毫升':'')};
@@ -794,7 +812,11 @@ function openDiaper(){
     <div class="actions"><button onclick="closeSheet()">取消</button></div>`);
 }
 function addDiaper(t){
-  D.diapers.unshift({id:uid(),ts:Date.now(),type:t}); save(); closeSheet(); buzz(14); render(); pushCloud();
+  D.diapers.unshift({id:uid(),ts:Date.now(),type:t});
+  save(); closeSheet(); buzz(14); render(); pushCloud();
+  const label = t==='pee'?'💧 尿了': t==='poop'?'💩 大便':'💧💩 都有';
+  showToast('已记录 '+label+' · 今日 💧'+D.diapers.filter(d=>d.ts>=today()&&(d.type==='pee'||d.type==='both')).length
+            +' 💩'+D.diapers.filter(d=>d.ts>=today()&&(d.type==='poop'||d.type==='both')).length, 2400);
 }
 function openWeight(){
   openSheet(`<h3>记录体重</h3>
@@ -806,6 +828,7 @@ function addWeight(){
   const kg=Number(document.getElementById('wIn').value);
   if(!kg) return;
   D.weights.unshift({id:uid(),ts:Date.now(),kg}); save(); closeSheet(); buzz(14); render(); pushCloud();
+  showToast('已记录体重 '+kg+' kg', 2400);
 }
 function fillSettings(){
   // 只在「不正在编辑」时才回填，避免用户输入被冲掉
