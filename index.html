@@ -520,7 +520,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v25';
+const APP_VER='v26';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -528,8 +528,12 @@ const CLOUD_KEY='feedtimer.cloud.v1';  // 本地记住用过的档案
 
 let D = load();
 function load(){
-  try{ return Object.assign({feeds:[],diapers:[],weights:[],settings:{}}, JSON.parse(localStorage.getItem(KEY)||'{}')); }
-  catch(e){ return {feeds:[],diapers:[],weights:[],settings:{}}; }
+  try{
+    const d=Object.assign({feeds:[],diapers:[],weights:[],settings:{},tombstones:{}}, JSON.parse(localStorage.getItem(KEY)||'{}'));
+    if(!d.tombstones || typeof d.tombstones!=='object') d.tombstones={};
+    return d;
+  }
+  catch(e){ return {feeds:[],diapers:[],weights:[],settings:{},tombstones:{}}; }
 }
 const S = D.settings;
 const set=(k,v)=>{ S[k]=v; save(); };
@@ -846,6 +850,9 @@ function delSelected(){
   if(!confirm('删除选中的 '+n+' 条记录？删了不能恢复')) return;
   const ids={feed:new Set(),diaper:new Set(),weight:new Set()};
   selected.forEach(k=>{ const i=k.indexOf(':'); ids[k.slice(0,i)].add(k.slice(i+1)); });
+  markDeleted('feed',   Array.from(ids.feed));
+  markDeleted('diaper', Array.from(ids.diaper));
+  markDeleted('weight', Array.from(ids.weight));
   D.feeds=D.feeds.filter(f=>!ids.feed.has(f.id));
   D.diapers=D.diapers.filter(d=>!ids.diaper.has(d.id));
   D.weights=D.weights.filter(w=>!ids.weight.has(w.id));
@@ -929,12 +936,14 @@ function renderLog(){
 
 function delDiaper(id){
   if(!confirm('删除这条尿布记录？')) return;
-  D.diapers=D.diapers.filter(d=>d.id!==id); save(); render(); pushCloud();
+  markDeleted('diaper', id);
+  D.diapers=D.diapers.filter(d=>d.id!==id); save(); render(); pushNow();
   bigToast('已删除 1 条');
 }
 function delWeight(id){
   if(!confirm('删除这条体重记录？')) return;
-  D.weights=D.weights.filter(w=>w.id!==id); save(); render(); pushCloud();
+  markDeleted('weight', id);
+  D.weights=D.weights.filter(w=>w.id!==id); save(); render(); pushNow();
   bigToast('已删除 1 条');
 }
 function renderStats(){
@@ -1076,7 +1085,8 @@ function go(v){
 }
 function delFeed(id){
   if(!confirm('删除这条记录？')) return;
-  D.feeds=D.feeds.filter(f=>f.id!==id); save(); render(); pushCloud();
+  markDeleted('feed', id);
+  D.feeds=D.feeds.filter(f=>f.id!==id); save(); render(); pushNow();
   bigToast('已删除 1 条');
 }
 function openSheet(html){
@@ -1235,8 +1245,9 @@ function addWeight(){
   closeSheet();                            // ← 点确认立刻关窗
   buzz(22);
   bigToast('✅ 已记录体重 '+jin+' 斤', ()=>{
+    markDeleted('weight', rec.id);
     D.weights=D.weights.filter(w=>w.id!==rec.id);
-    save(); render(); pushCloud(); bigToast('已撤销');
+    save(); render(); pushNow(); bigToast('已撤销');
   });
 }
 function fillSettings(){
@@ -1393,16 +1404,43 @@ async function cloudPut(all){
 
 /* 按记录 id 去重合并（云端 + 本地，谁新用谁） */
 function mergeProfile(remote, local){
-  const r=Object.assign({feeds:[],diapers:[],weights:[],settings:{}}, remote||{});
-  const l=Object.assign({feeds:[],diapers:[],weights:[],settings:{}}, local||{});
-  const merged={feeds:[],diapers:[],weights:[],settings:Object.assign({}, r.settings, l.settings)};
+  const r=Object.assign({feeds:[],diapers:[],weights:[],settings:{},tombstones:{}}, remote||{});
+  const l=Object.assign({feeds:[],diapers:[],weights:[],settings:{},tombstones:{}}, local||{});
+  // 墓碑：被删除的记录 id → 删除时间。任何一方删了，就以删除为准
+  const tombstones=Object.assign({}, r.tombstones||{}, l.tombstones||{});
+  const merged={feeds:[],diapers:[],weights:[],settings:Object.assign({}, r.settings, l.settings), tombstones};
   ['feeds','diapers','weights'].forEach(k=>{
     const map=new Map();
-    (r[k]||[]).forEach(x=>map.set(x.id,x));
-    (l[k]||[]).forEach(x=>map.set(x.id,x));   // 本地覆盖同 id
+    (r[k]||[]).forEach(x=>{ if(!tombstones[x.id]) map.set(x.id,x); });
+    (l[k]||[]).forEach(x=>{ if(!tombstones[x.id]) map.set(x.id,x); });
     merged[k]=Array.from(map.values()).sort((a,b)=>b.ts-a.ts);
   });
   return merged;
+}
+
+/* 标记删除（墓碑）—— 保证删除能传遍所有设备，不会被云端合并回来 */
+function markDeleted(kind, ids){
+  const arr=Array.isArray(ids)?ids:[ids];
+  const now=Date.now();
+  arr.forEach(id=>{ D.tombstones[id]=now; });
+  // 墓碑最多留 90 天，之后清理（避免无限膨胀）
+  const cutoff=now-90*86400000;
+  Object.keys(D.tombstones).forEach(id=>{ if(D.tombstones[id]<cutoff) delete D.tombstones[id]; });
+}
+/* 立即推云端（删除类操作不等 2.5 秒防抖） */
+async function pushNow(){
+  clearTimeout(cloudTimer);
+  cloudBusy=true;
+  try{
+    const all=await cloudFetch();
+    if(all!==null){
+      const k=babyKey();
+      all[k]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings, tombstones:D.tombstones};
+      for(const kk in localProfiles()) if(kk!==k && !all[kk]) all[kk]=localProfiles()[kk];
+      if(await cloudPut(all)) setLocalProfile(k, all[k]);
+    }
+  }catch(e){}
+  cloudBusy=false;
 }
 
 /* 切换到某个宝宝档案 */
@@ -1449,6 +1487,7 @@ function applyProfile(name, p){
   D.feeds=p.feeds||[];
   D.diapers=p.diapers||[];
   D.weights=p.weights||[];
+  D.tombstones=p.tombstones||D.tombstones||{};
   // 注意：S 是 const 且 D.settings 与 S 同引用，
   // 这里必须「原地改」而不是替换对象，否则 S 会指向旧对象、名字改不掉
   const keepTheme=S.theme;
@@ -1653,7 +1692,7 @@ function pushCloud(){
     const all=await cloudFetch();
     if(all!==null){
       const k=babyKey();
-      all[k]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings};
+      all[k]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings, tombstones:D.tombstones};
       for(const kk in localProfiles()) if(kk!==k && !all[kk]) all[kk]=localProfiles()[kk];
       const ok=await cloudPut(all);
       if(ok) setLocalProfile(k, all[k]);
@@ -1741,7 +1780,7 @@ render();
       if(localN>remoteN) pushCloud();
     }else if(all && localHas){
       // 云端没有这个档案，但本地有数据 → 主动上传（修复"分享出去看不到历史"）
-      all[nm]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings};
+      all[nm]={feeds:D.feeds, diapers:D.diapers, weights:D.weights, settings:D.settings, tombstones:D.tombstones};
       const ok=await cloudPut(all);
       if(ok){ setLocalProfile(nm, all[nm]); showToast('本机记录已上传云端', 2600); }
     }
@@ -1777,7 +1816,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v25';
+  var APP_VER='v26';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
