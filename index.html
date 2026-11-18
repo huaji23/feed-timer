@@ -475,7 +475,7 @@ body.selecting #v-log{padding-bottom:150px}
         </div>
         <div class="fld">
           <div class="k">版本<small>显示不对就点这里强制更新</small></div>
-          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v13</button>
+          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v14</button>
         </div>
         <div class="fld">
           <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
@@ -508,7 +508,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v13';
+const APP_VER='v14';
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
 const CLOUD_KEY='feedtimer.cloud.v1';  // 本地记住用过的档案
@@ -1079,13 +1079,14 @@ function addDiaper(t){
 
   // 防重复：30 秒内同一类型不再记（防止连点手滑）
   // 不同类型（尿了→大便）不拦，那是真实情况
-  const lastSame=D.diapers.find(d=>d.type===t);
+  // 取所有同类型里最新的那条
+  const sameList=D.diapers.filter(d=>d.type===t);
+  const lastSame=sameList.length? sameList.reduce((a,b)=>a.ts>b.ts?a:b) : null;
   if(lastSame){
-    const ago=Math.floor((Date.now()-lastSame.ts)/1000);
-    if(ago < DUP_WINDOW_MS){
+    const ago=Math.floor((Date.now()-lastSame.ts)/1000);   // 秒
+    if(ago < DUP_WINDOW_SEC){
       closeSheet();
-      const wait=DUP_WINDOW_MS-ago;
-      bigToast('⏱ 刚记过「'+label+'」，'+wait+' 秒内不能重复记');
+      bigToast('⏱ 刚记过「'+label+'」，还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
       return;
     }
   }
@@ -1113,9 +1114,9 @@ function addWeight(){
   const lastW=D.weights[0];
   if(lastW && Math.abs(lastW.kg-kg)<0.001){
     const ago=Math.floor((Date.now()-lastW.ts)/1000);
-    if(ago < DUP_WINDOW_MS){
+    if(ago < DUP_WINDOW_SEC){
       closeSheet();
-      bigToast('⏱ 刚记过 '+kg+' kg，'+(DUP_WINDOW_MS-ago)+' 秒内不能重复记');
+      bigToast('⏱ 刚记过 '+kg+' kg，还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
       return;
     }
   }
@@ -1419,8 +1420,8 @@ function __toastUndo(){
 }
 
 /* 防重复：同一类型 N 秒内只记一次 */
-const DUP_WINDOW_MS = 30000;   // 30 秒内同类型不重复记
-const DUP_WINDOW_FEED = 10000; // 喂奶 10 秒
+const DUP_WINDOW_SEC = 30;    // 30 秒内同类型不重复记（单位：秒）
+const DUP_WINDOW_FEED_SEC = 10;
 function tooSoon(list, matchFn){
   const now=Date.now();
   return (list||[]).some(x=>now-x.ts < DUP_WINDOW_MS && matchFn(x));
