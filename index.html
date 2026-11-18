@@ -201,7 +201,19 @@ input,select{font:inherit;color:inherit}
 .selbar.on{display:flex}
 .selbar span{flex:1;font-size:13.5px;color:var(--tx);font-weight:600}
 .selbar button{background:var(--card);border:1px solid var(--line);color:var(--tx);
-  border-radius:10px;padding:8px 12px;font-size:13px}
+  border-radius:10px;padding:8px 12px;font-size:13px;flex:none;white-space:nowrap}
+.selbar .cnt{flex:none;font-size:13.5px;color:var(--tx);font-weight:600;padding-right:2px}
+.selbar .acts{display:flex;gap:6px;flex:1;justify-content:flex-end}
+.selbar .acts button{flex:none}
+.selmore{
+  position:fixed;left:0;right:0;bottom:calc(104px + env(safe-area-inset-bottom,0px));
+  display:none;flex-direction:column;gap:1px;z-index:261;
+  background:var(--card2);border-top:1px solid var(--line);padding:6px;
+}
+.selmore.on{display:flex}
+.selmore button{background:transparent;border:0;color:var(--tx);text-align:left;
+  padding:13px 14px;font-size:14.5px;border-radius:9px}
+.selmore button:active{background:var(--card)}
 .selbar button.danger{border-color:var(--warn);color:var(--warn);font-weight:600}
 .row.sel{background:rgba(240,168,104,.12);border-radius:10px}
 .row .ck{width:20px;height:20px;flex:none;border-radius:6px;border:1.5px solid var(--line);
@@ -335,10 +347,20 @@ body.selecting #v-log{padding-bottom:150px}
 
   <!-- 多选操作条 -->
   <div class="selbar" id="selBar">
-    <span id="selCount">已选 0 条</span>
-    <button onclick="selToday()">全选本日</button>
-    <button onclick="selAll()">全选</button>
-    <button class="danger" onclick="delSelected()">删除</button>
+    <span class="cnt" id="selCount">已选 0 条</span>
+    <div class="acts">
+      <button onclick="selToday()">只选今天</button>
+      <button onclick="selAll()">全选</button>
+      <button class="danger" onclick="delSelected()">删除</button>
+      <button onclick="toggleMore()" id="moreBtn">更多 ▾</button>
+    </div>
+  </div>
+  <div class="selmore" id="selMore">
+    <button onclick="selKind('diaper');hideMore()">只选尿布</button>
+    <button onclick="selKind('feed');hideMore()">只选喂奶</button>
+    <button onclick="selKind('weight');hideMore()">只选体重</button>
+    <button onclick="selInvert();hideMore()">反选（取消已选）</button>
+    <button onclick="selToday();hideMore()">只选今天的尿布</button>
   </div>
 
   <!-- ===== 统计 ===== -->
@@ -767,6 +789,33 @@ function selAll(){
   D.feeds.forEach(f=>selected.add(rowKey('feed',f.id)));
   D.diapers.forEach(d=>selected.add(rowKey('diaper',d.id)));
   D.weights.forEach(w=>selected.add(rowKey('weight',w.id)));
+  renderLog(); updateSelBar();
+}
+/* 只选某一类：diaper / feed / weight */
+function selKind(kind){
+  if(kind==='diaper') D.diapers.forEach(d=>selected.add(rowKey('diaper',d.id)));
+  else if(kind==='feed') D.feeds.forEach(f=>selected.add(rowKey('feed',f.id)));
+  else D.weights.forEach(w=>selected.add(rowKey('weight',w.id)));
+  renderLog(); updateSelBar();
+}
+function toggleMore(){
+  const m=document.getElementById('selMore');
+  const b=document.getElementById('moreBtn');
+  if(m) m.classList.toggle('on');
+  if(b) b.textContent = (m&&m.classList.contains('on')) ? '收起 ▴' : '更多 ▾';
+}
+function hideMore(){
+  const m=document.getElementById('selMore');
+  const b=document.getElementById('moreBtn');
+  if(m) m.classList.remove('on');
+  if(b) b.textContent='更多 ▾';
+}
+function selInvert(){
+  const all=[];
+  D.feeds.forEach(f=>all.push(rowKey('feed',f.id)));
+  D.diapers.forEach(d=>all.push(rowKey('diaper',d.id)));
+  D.weights.forEach(w=>all.push(rowKey('weight',w.id)));
+  all.forEach(k=>{ if(selected.has(k)) selected.delete(k); else selected.add(k); });
   renderLog(); updateSelBar();
 }
 function delSelected(){
