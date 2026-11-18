@@ -520,7 +520,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v20';
+const APP_VER='v21';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1740,7 +1740,17 @@ render();
     setTimeout(()=>openBabySwitch(), 400);
   }
 })();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* 注册 SW 时带时间戳 → 每次都强制重新下载 sw.js，浏览器立刻发现新版本 */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js?t='+Date.now()).then(reg=>{
+    // 有新 SW 装好了 → 立刻接管当前页
+    if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+  }).catch(()=>{});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    // SW 换人后重载一次，拿到新代码
+    if(!window.__swReloaded){ window.__swReloaded=1; location.reload(); }
+  });
+}
 /* 页面回到前台时刷新；并且任何点击都刷新 ——
    iOS 在后台会冻结 JS 定时器，靠定时器驱动会显示旧值。
    时长本身按时间戳实时算（elapsedSec），所以只要 render 跑一次就是准的。 */
@@ -1750,22 +1760,53 @@ window.addEventListener('pageshow',()=>{ accrue(); render(); });
 document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } }, {passive:true});
 </script>
 <script>
-/* 版本自检：独立 script，不受主程序影响。
-   线上 version.json 比本地 APP_VER 新 → 自动跳到带时间戳的 URL，绕开一切缓存 */
+/* 版本自检 + 硬刷新：独立 script，不受主程序影响。
+   1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
+   2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v20';
-  function babyKey(){
-    try{ return (localStorage.getItem('feedtimer.cloud.v1') && JSON.parse(localStorage.getItem('feedtimer.cloud.v1')).cur) || ''; }
-    catch(e){ return ''; }
+  var APP_VER='v21';
+  function cur(){
+    try{
+      var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
+      return v.cur||'';
+    }catch(e){ return ''; }
+  }
+  function jump(ver){
+    var q='?baby='+encodeURIComponent(cur())+'&v='+ver+'&_r='+Date.now();
+    location.replace(location.pathname+q);
   }
   function run(){
+    // ② 先检查 URL：带 _r 说明已经硬刷过，不用再刷
+    var q=new URLSearchParams(location.search);
+    if(!q.get('_r')){
+      // 本次会话已经刷过 → 不再刷（防死循环）
+      try{
+        if(sessionStorage.getItem('feedtimer._r')==='1'){
+          // 已刷过，只比对版本
+          fetch('./version.json?t='+Date.now(), {cache:'no-store'})
+            .then(function(r){ return r.ok? r.json() : null; })
+            .then(function(j){ if(j && j.ver && j.ver!==APP_VER) jump(j.ver); })
+            .catch(function(){});
+          return;
+        }
+        sessionStorage.setItem('feedtimer._r','1');
+      }catch(e){}
+      // 没刷过 → 先用线上版本号硬刷一次
+      fetch('./version.json?t='+Date.now(), {cache:'no-store'})
+        .then(function(r){ return r.ok? r.json() : null; })
+        .then(function(j){
+          if(j && j.ver) jump(j.ver);
+          else jump(APP_VER);
+        })
+        .catch(function(){ jump(APP_VER); });
+      return;
+    }
+    try{ sessionStorage.setItem('feedtimer._r','1'); }catch(e){}
+    // ① 已经硬刷过，再比对版本
     fetch('./version.json?t='+Date.now(), {cache:'no-store'})
       .then(function(r){ return r.ok? r.json() : null; })
       .then(function(j){
-        if(j && j.ver && j.ver!==APP_VER){
-          var q='?baby='+encodeURIComponent(babyKey())+'&v='+j.ver+'&t='+Date.now();
-          location.replace(location.pathname+q);
-        }
+        if(j && j.ver && j.ver!==APP_VER) jump(j.ver);
       })
       .catch(function(){});
   }
