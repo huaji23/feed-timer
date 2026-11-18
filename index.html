@@ -582,7 +582,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v27';
+const APP_VER='v28';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1387,15 +1387,18 @@ function paintThemeSeg(){
     seg.appendChild(thumb);
   }
   const active=btns.find(b=>(b.dataset.t||'dark')===cur) || btns[0];
-  // 等布局完成再量位置
-  requestAnimationFrame(()=>{
+  // 同步测量（布局已稳定）+ 双保险 rAF
+  const move=()=>{
     const sr=seg.getBoundingClientRect();
     const ar=active.getBoundingClientRect();
     if(!ar.width) return;
     thumb.style.width=ar.width+'px';
     thumb.style.height=ar.height+'px';
     thumb.style.transform='translateX('+(ar.left-sr.left)+'px)';
-  });
+  };
+  move();
+  requestAnimationFrame(move);
+  setTimeout(move, 60);
 
   btns.forEach(b=>{
     const on=(b.dataset.t||'dark')===cur;
@@ -1424,6 +1427,7 @@ function setTheme(t){
   fillSettings();
   paintThemeSeg();
   render();
+  setTimeout(paintThemeSeg, 80);   // 布局稳定后重新定位滑块
 }
 function applyTheme(){
   let t;
@@ -1905,7 +1909,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v27';
+  var APP_VER='v28';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
