@@ -516,7 +516,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v16';
+const APP_VER='v17';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1169,8 +1169,8 @@ function addWeight(){
   const lastW=D.weights[0];
   if(lastW && Math.abs(lastW.kg-kg)<0.001){
     const ago=Math.floor((Date.now()-lastW.ts)/1000);
-    if(ago < DUP_WINDOW_SEC){
-      sheetMsg('⏱','刚记过 '+kg+' kg','还要等 '+(DUP_WINDOW_SEC-ago)+' 秒');
+    if(ago < DUP_WINDOW_WEIGHT_SEC){
+      sheetMsg('⏱','刚记过 '+kg+' kg','还要等 '+(DUP_WINDOW_WEIGHT_SEC-ago)+' 秒');
       buzz(30);
       setTimeout(()=>closeSheet(), 1400);
       return;
@@ -1488,8 +1488,8 @@ function __toastUndo(){
 }
 
 /* 防重复：同一类型 N 秒内只记一次 */
-const DUP_WINDOW_SEC = 30;    // 30 秒内同类型不重复记（单位：秒）
-const DUP_WINDOW_FEED_SEC = 10;
+const DUP_WINDOW_SEC = 60;         // 尿布：60 秒内同类型不重复记（单位：秒）
+const DUP_WINDOW_WEIGHT_SEC = 30;  // 体重：30 秒
 function tooSoon(list, matchFn){
   const now=Date.now();
   return (list||[]).some(x=>now-x.ts < DUP_WINDOW_MS && matchFn(x));
