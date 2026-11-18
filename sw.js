@@ -1,20 +1,22 @@
 /* Service Worker —— 网络优先（保证更新立刻生效），离线回退缓存 */
-const CACHE = 'feedtimer-v23';
+const CACHE = 'feedtimer-v24';
 const ASSETS = ['./manifest.json', './icon-180.png', './icon-512.png'];  // HTML 不缓存
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => caches.open(CACHE))
+    caches.open(CACHE)
       .then(c => c.addAll(ASSETS).catch(() => {}))
       .then(() => self.skipWaiting())
   );
 });
 
-/* 页面发来 SKIP_WAITING → 立刻接管 */
+/* 页面消息：SKIP_WAITING 立刻接管 / CLEAR_CACHE 清缓存 */
 self.addEventListener('message', e => {
-  if(e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if(!e.data) return;
+  if(e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if(e.data.type === 'CLEAR_CACHE'){
+    caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))).catch(()=>{});
+  }
 });
 
 self.addEventListener('activate', e => {
