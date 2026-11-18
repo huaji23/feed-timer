@@ -229,11 +229,12 @@ body.selecting #v-log{padding-bottom:150px}
   background:var(--card2);border:1px solid var(--acc);border-radius:14px;
   padding:14px 16px;z-index:300;
   box-shadow:0 8px 28px rgba(0,0,0,.45);
-  transform:translateY(140%);opacity:0;pointer-events:none;
-  transition:transform .22s ease,opacity .22s ease;
+  transform:translateY(160%) scale(.94);opacity:0;pointer-events:none;
+  transition:transform .28s cubic-bezier(.2,1.3,.4,1),opacity .2s ease;
+  box-shadow:0 10px 36px rgba(0,0,0,.55), 0 0 0 1px rgba(240,168,104,.25);
 }
-.toast.on{transform:translateY(0);opacity:1;pointer-events:auto}
-.toast span{flex:1;font-size:14.5px;color:var(--tx);line-height:1.35;font-weight:500}
+.toast.on{transform:translateY(0) scale(1);opacity:1;pointer-events:auto}
+.toast span{flex:1;font-size:15.5px;color:var(--tx);line-height:1.4;font-weight:600}
 .toast button{
   flex:none;background:transparent;border:1px solid var(--acc);color:var(--acc);
   border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;
@@ -473,6 +474,10 @@ body.selecting #v-log{padding-bottom:150px}
           <div class="hint-line" id="shareHint"></div>
         </div>
         <div class="fld">
+          <div class="k">版本<small>显示不对就点这里强制更新</small></div>
+          <button class="icon-btn" onclick="forceUpdate()" id="verBtn">v12</button>
+        </div>
+        <div class="fld">
           <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
           <button class="icon-btn" onclick="askNotify()" id="notifyBtn">开启</button>
         </div>
@@ -503,6 +508,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
+const APP_VER='v12';
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
 const CLOUD_KEY='feedtimer.cloud.v1';  // 本地记住用过的档案
@@ -908,10 +914,12 @@ function renderLog(){
 function delDiaper(id){
   if(!confirm('删除这条尿布记录？')) return;
   D.diapers=D.diapers.filter(d=>d.id!==id); save(); render(); pushCloud();
+  bigToast('已删除 1 条');
 }
 function delWeight(id){
   if(!confirm('删除这条体重记录？')) return;
   D.weights=D.weights.filter(w=>w.id!==id); save(); render(); pushCloud();
+  bigToast('已删除 1 条');
 }
 function renderStats(){
   const tf=D.feeds.filter(f=>f.ts>=today());
@@ -1053,6 +1061,7 @@ function go(v){
 function delFeed(id){
   if(!confirm('删除这条记录？')) return;
   D.feeds=D.feeds.filter(f=>f.id!==id); save(); render(); pushCloud();
+  bigToast('已删除 1 条');
 }
 function openSheet(html){ document.getElementById('panel').innerHTML=html; document.getElementById('sheet').classList.add('on'); }
 function closeSheet(){ document.getElementById('sheet').classList.remove('on'); }
@@ -1116,6 +1125,8 @@ function fillSettings(){
   document.getElementById('notifyBtn').textContent = Notification.permission==='granted'?'已开启':'开启';
   // 主题选中态
   paintThemeSeg();
+  const vb=document.getElementById('verBtn');
+  if(vb) vb.textContent=APP_VER;
   const sb=document.getElementById('shareBabyBtn');
   if(sb) sb.textContent = '分享「'+(S.name||'宝宝')+'」';
 }
@@ -1315,6 +1326,24 @@ function applyProfile(name, p){
   save();
 }
 
+/* 强制更新：清 Service Worker + 缓存 + 重新加载 */
+async function forceUpdate(){
+  const btn=document.getElementById('verBtn');
+  if(btn) btn.textContent='更新中…';
+  try{
+    if(navigator.serviceWorker){
+      const rs=await navigator.serviceWorker.getRegistrations();
+      for(const r of rs) await r.unregister();
+    }
+    if(window.caches){
+      const ks=await caches.keys();
+      for(const k of ks) await caches.delete(k);
+    }
+    localStorage.removeItem('feedtimer.sess');
+  }catch(e){}
+  location.reload(true);
+}
+
 /* ================= 分享链接 ================= */
 function getUrlBaby(){
   try{
@@ -1336,7 +1365,8 @@ function setUrlBaby(name){
 /* 分享用链接（name 为空 = 不带名字） */
 function linkFor(name){
   const base = location.origin + location.pathname;
-  return name ? base + '?baby=' + encodeURIComponent(name) : base;
+  const v = APP_VER ? '&v=' + APP_VER : '';
+  return name ? base + '?baby=' + encodeURIComponent(name) + v : base + '?v=' + APP_VER;
 }
 
 /* 轻提示（顶栏灰字，用于同步状态这类弱信息） */
@@ -1358,9 +1388,9 @@ function bigToast(msg, undoFn, ms){
   __undoFn = typeof undoFn==='function' ? undoFn : null;
   btn.style.display = __undoFn ? '' : 'none';
   box.classList.add('on');
-  buzz(16);
+  buzz(18);
   clearTimeout(bigToastTimer);
-  bigToastTimer=setTimeout(hideBigToast, ms||6000);
+  bigToastTimer=setTimeout(hideBigToast, ms||4000);
 }
 function hideBigToast(){
   const box=document.getElementById('toast');
