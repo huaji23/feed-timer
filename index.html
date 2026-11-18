@@ -519,7 +519,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v18';
+const APP_VER='v19';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1463,7 +1463,7 @@ async function forceUpdate(){
     }
     localStorage.removeItem('feedtimer.sess');
   }catch(e){}
-  location.reload(true);
+  location.replace(location.pathname + '?baby=' + encodeURIComponent(babyKey()) + '&v=' + APP_VER + '&t=' + Date.now());
 }
 
 /* ================= 分享链接 ================= */
@@ -1680,6 +1680,7 @@ applyTheme();
 render();
 
 /* 启动时：如果本地有档案名，自动拉一次云端（拿到别人刚记的） */
+
 (async function boot(){
   // ① 链接带 ?baby=名字 → 直接用该档案（家人点分享链接走这里）
   const urlBaby=getUrlBaby();
@@ -1732,6 +1733,30 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ accrue(
 window.addEventListener('focus',()=>{ accrue(); render(); });
 window.addEventListener('pageshow',()=>{ accrue(); render(); });
 document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } }, {passive:true});
+</script>
+<script>
+/* 版本自检：独立 script，不受主程序影响。
+   线上 version.json 比本地 APP_VER 新 → 自动跳到带时间戳的 URL，绕开一切缓存 */
+(function(){
+  var APP_VER='v19';
+  function babyKey(){
+    try{ return (localStorage.getItem('feedtimer.cloud.v1') && JSON.parse(localStorage.getItem('feedtimer.cloud.v1')).cur) || ''; }
+    catch(e){ return ''; }
+  }
+  function run(){
+    fetch('./version.json?t='+Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok? r.json() : null; })
+      .then(function(j){
+        if(j && j.ver && j.ver!==APP_VER){
+          var q='?baby='+encodeURIComponent(babyKey())+'&v='+j.ver+'&t='+Date.now();
+          location.replace(location.pathname+q);
+        }
+      })
+      .catch(function(){});
+  }
+  if(document.readyState==='complete') run();
+  else window.addEventListener('load', run);
+})();
 </script>
 </body>
 </html>
