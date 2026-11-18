@@ -27,10 +27,14 @@ html[data-theme="eye"]{
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--tx);
-  font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",sans-serif;
-  overscroll-behavior-y:none}
+  font:16px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",sans-serif;
+  letter-spacing:.01em;overscroll-behavior-y:none;
+  -webkit-font-smoothing:antialiased}
 body{min-height:100vh;padding-bottom:calc(64px + var(--safe-b))}
-button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+/* 全局按压反馈：所有可点元素按下时缩一点点（140ms），让用户确信"点到了" */
+button:active{transform:scale(.97);transition:transform 140ms cubic-bezier(.23,1,.32,1)}
 input,select{font:inherit;color:inherit}
 
 #app{max-width:520px;margin:0 auto}
@@ -50,6 +54,27 @@ input,select{font:inherit;color:inherit}
 .seg button.on{background:var(--card2);color:var(--tx);border-color:var(--acc)}
 .seg button.on[data-m="pump"]{border-color:var(--acc2)}
 .seg button.on[data-m="bottle"]{border-color:var(--ok)}
+
+/* ---------- 主题分段控件（滑块式，选中态绝对清晰） ---------- */
+#themeSeg{
+  position:relative;display:flex;gap:0;padding:5px;
+  background:var(--card2);border:1px solid var(--line);border-radius:13px;
+  width:100%;isolation:isolate;
+}
+#themeSeg button{
+  position:relative;z-index:2;flex:1;padding:11px 0;border-radius:9px;
+  background:transparent;border:0;font-size:14.5px;line-height:1;
+  transition:color 200ms cubic-bezier(.23,1,.32,1),font-weight 200ms ease;
+}
+#themeSeg button.on{color:var(--acc)}
+/* 滑块：跟随选中项移动 */
+#themeSeg .seg-thumb{
+  position:absolute;z-index:1;left:0;top:5px;
+  background:var(--card);border:1px solid var(--acc);border-radius:9px;
+  box-shadow:0 1px 4px rgba(0,0,0,.12);
+  transition:transform 260ms cubic-bezier(.23,1,.32,1),width 260ms cubic-bezier(.23,1,.32,1);
+  pointer-events:none;
+}
 
 /* ---------- 计时主体 ---------- */
 .stage{padding:20px 20px 8px;display:flex;flex-direction:column;align-items:center}
@@ -88,13 +113,13 @@ input,select{font:inherit;color:inherit}
 .sec{padding:18px 20px 0}
 .sec h2{margin:0 0 10px;font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.4px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:15px;overflow:hidden}
-.row{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:14px;padding:15px 16px;border-bottom:1px solid var(--line);min-height:56px}
 .row:last-child{border-bottom:0}
-.row .t{font-size:15px;font-variant-numeric:tabular-nums;flex:none;width:52px;color:var(--tx)}
+.row .t{font-size:15px;font-variant-numeric:tabular-nums;flex:none;width:54px;color:var(--tx);font-weight:500}
 .row .m{flex:1;min-width:0}
-.row .m .a{font-size:14.5px}
-.row .m .b{font-size:12px;color:var(--mut);margin-top:2px}
-.row .d{font-size:14px;color:var(--mut);font-variant-numeric:tabular-nums;flex:none}
+.row .m .a{font-size:15px;line-height:1.45;font-weight:500}
+.row .m .b{font-size:13px;color:var(--mut);margin-top:4px;line-height:1.4}
+.row .d{font-size:14px;color:var(--mut);font-variant-numeric:tabular-nums;flex:none;font-weight:500}
 .daylabel{padding:14px 15px 6px;font-size:12px;color:var(--mut)}
 .empty{padding:26px 15px;text-align:center;color:var(--mut);font-size:13.5px}
 
@@ -111,10 +136,13 @@ input,select{font:inherit;color:inherit}
 .bars .lb{font-size:10px;color:var(--mut)}
 
 /* ---------- 设置 ---------- */
-.fld{padding:14px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.fld{padding:16px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px}
 .fld:last-child{border-bottom:0}
-.fld .k{flex:1;font-size:14.5px}
-.fld .k small{display:block;color:var(--mut);font-size:11.5px;margin-top:2px}
+.fld .k{flex:1;min-width:0;font-size:15.5px;line-height:1.45;font-weight:500}
+.fld .k small{
+  display:block;color:var(--mut);font-size:13px;line-height:1.5;
+  margin-top:5px;font-weight:400;letter-spacing:.005em;
+}
 .fld input[type=text],.fld input[type=number]{background:var(--card2);border:1px solid var(--line);
   border-radius:10px;padding:9px 11px;width:132px;text-align:right;font-variant-numeric:tabular-nums}
 .fld input.short{width:78px}
@@ -262,11 +290,18 @@ body.selecting #v-log{padding-bottom:150px}
 .btnrow button.danger{color:var(--warn);border-color:#3a2a2a}
 
 /* ---------- 底部导航 ---------- */
-.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(15,17,21,.92);
-  backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:var(--safe-b);z-index:50}
-.nav button{flex:1;padding:11px 0 12px;font-size:10.5px;color:var(--mut)}
-.nav button .ic{display:block;font-size:19px;margin-bottom:3px;line-height:1}
-.nav button.on{color:var(--acc)}
+/* 导航栏跟随主题（用语义变量，不再硬编码深色） */
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;
+  background:color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter:blur(20px) saturate(1.4);
+  -webkit-backdrop-filter:blur(20px) saturate(1.4);
+  border-top:1px solid var(--line);padding-bottom:var(--safe-b);z-index:50}
+.nav button{
+  flex:1;padding:11px 0 13px;font-size:11.5px;color:var(--mut);font-weight:500;
+  letter-spacing:.02em;min-height:52px;transition:color 160ms ease;
+}
+.nav button .ic{display:block;font-size:21px;margin-bottom:4px;line-height:1}
+.nav button.on{color:var(--acc);font-weight:600}
 
 /* ---------- 弹层 ---------- */
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center;z-index:100}
@@ -280,12 +315,39 @@ body.selecting #v-log{padding-bottom:150px}
 .chips button.on{border-color:var(--acc);color:var(--acc)}
 .sheet input[type=number]{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:12px;
   padding:14px;font-size:24px;text-align:center;font-variant-numeric:tabular-nums;margin-bottom:14px}
-.sheet .actions{display:flex;gap:9px;margin-top:16px}
-.sheet .actions button{flex:1;padding:14px;border-radius:13px;background:var(--card2);border:1px solid var(--line);font-size:15px}
-.sheet .actions button.pri{background:var(--acc);color:#1a1206;border-color:var(--acc);font-weight:600}
+/* 弹层底部：主按钮全宽 + 取消是小字链接（视觉层级明确，不会有"两个平级选项"的困惑） */
+.sheet .actions{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.sheet .actions button{
+  width:100%;padding:15px;border-radius:14px;font-size:15.5px;font-weight:600;
+  background:var(--card2);border:1px solid var(--line);color:var(--tx);
+  transition:transform 140ms cubic-bezier(.23,1,.32,1),opacity 140ms ease;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.sheet .actions button:active{transform:scale(.97);opacity:.9}
+/* 主按钮：实心橙，全宽，最突出 */
+.sheet .actions button.pri{
+  background:var(--acc);color:#1A1206;border-color:var(--acc);
+  box-shadow:0 4px 16px rgba(240,168,104,.28);
+}
+/* 次要动作（取消）：降级成文字链，不跟主按钮抢注意力 */
+.sheet .actions button.ghost{
+  background:transparent;border:0;color:var(--mut);font-weight:500;font-size:14px;
+  padding:11px;min-height:44px;
+}
+.sheet .actions button.ghost:active{background:var(--card2);transform:none}
 .actions button.pri:disabled{background:var(--card2);color:var(--mut);border-color:var(--line);font-weight:400}
-.sel-hint{text-align:center;font-size:13.5px;color:var(--mut);padding:2px 20px 0;min-height:20px}
-.sel-hint.on{color:var(--acc);font-weight:600}
+.sel-hint{
+  text-align:center;font-size:13.5px;color:var(--mut);
+  padding:10px 20px 0;min-height:38px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:color 160ms ease;
+}
+.sel-hint.on{
+  color:var(--acc);font-weight:600;
+  background:color-mix(in srgb, var(--acc) 12%, transparent);
+  border-radius:11px;
+  margin:12px 20px 0;padding:10px 14px;min-height:0;
+}
 .view{display:none;padding-bottom:10px}
 .view.on{display:block}
 </style>
@@ -520,7 +582,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v26';
+const APP_VER='v27';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1111,7 +1173,7 @@ function openDiaper(){
     </div>
     <div class="sel-hint" id="diaperHint">先选一种，然后点下面确认</div>
     <div class="actions">
-      <button onclick="closeSheet()">取消</button>
+      <button class="ghost" onclick="closeSheet()">取消</button>
       <button class="pri" id="diaperOk" onclick="commitDiaper()">确认记录</button>
     </div>`);
   paintDiaperSel();
@@ -1138,7 +1200,12 @@ function paintDiaperSel(){
   });
   const hint=document.getElementById('diaperHint');
   const ok=document.getElementById('diaperOk');
-  if(hint) hint.textContent = diaperSel ? '已选：'+(diaperSel==='pee'?'💧 尿了':diaperSel==='poop'?'💩 大便':'💧💩 都有')+'，点「确认记录」' : '先选一种，然后点下面确认';
+  if(hint){
+    hint.textContent = diaperSel
+      ? '已选：'+(diaperSel==='pee'?'💧 尿了':diaperSel==='poop'?'💩 大便':'💧💩 都有')+'，点下面橙色按钮确认'
+      : '先选一种，然后点下面橙色按钮确认';
+    hint.classList.toggle('on', !!diaperSel);
+  }
   if(ok){
     ok.disabled = !diaperSel;
     ok.style.opacity = diaperSel ? '1' : '.45';
@@ -1213,7 +1280,7 @@ function openWeight(){
   openSheet(`<h3>记录体重</h3>
     <input type="number" id="wIn" step="0.1" inputmode="decimal" placeholder="斤（例如 13.5）">
     <div class="actions">
-      <button onclick="closeSheet()">取消</button>
+      <button class="ghost" onclick="closeSheet()">取消</button>
       <button class="pri" id="wOk" onclick="addWeight()">确认记录</button>
     </div>`);
   const el=document.getElementById('wIn');
@@ -1303,24 +1370,46 @@ function saveName(){
 
 /* ---------- 主题 ---------- */
 /* 主题选中态：直接写内联样式，不依赖 CSS 优先级 */
+/* 主题分段控件：整组是一个轨道，选中项用「胶囊 + 滑块」高亮 */
 function paintThemeSeg(){
-  const btns=document.querySelectorAll('#themeSeg button');
+  const seg=document.getElementById('themeSeg');
+  if(!seg) return;
+  const btns=[...seg.querySelectorAll('button')];
   if(!btns.length) return;
   let cur;
   try{ cur=localStorage.getItem(THEME_KEY) || S.theme || 'dark'; }catch(e){ cur=S.theme||'dark'; }
+
+  // 滑块（只在有选中项时显示）
+  let thumb=seg.querySelector('.seg-thumb');
+  if(!thumb){
+    thumb=document.createElement('div');
+    thumb.className='seg-thumb';
+    seg.appendChild(thumb);
+  }
+  const active=btns.find(b=>(b.dataset.t||'dark')===cur) || btns[0];
+  // 等布局完成再量位置
+  requestAnimationFrame(()=>{
+    const sr=seg.getBoundingClientRect();
+    const ar=active.getBoundingClientRect();
+    if(!ar.width) return;
+    thumb.style.width=ar.width+'px';
+    thumb.style.height=ar.height+'px';
+    thumb.style.transform='translateX('+(ar.left-sr.left)+'px)';
+  });
+
   btns.forEach(b=>{
     const on=(b.dataset.t||'dark')===cur;
     b.classList.toggle('on', on);
-    // 选中：实心橙底 + 深色字 + 橙边（和「母乳」按钮一样的强度，看得出来）
-    b.style.background = on ? 'var(--acc)' : 'var(--card)';
-    b.style.color = on ? '#1A1208' : 'var(--mut)';
-    b.style.borderColor = on ? 'var(--acc)' : 'var(--line)';
-    b.style.fontWeight = on ? '700' : '400';
-    b.style.boxShadow = on ? '0 0 0 1.5px var(--acc)' : 'none';
-    b.style.transform = on ? 'scale(1.02)' : 'scale(1)';
-    // 打勾标记，一眼看出选了哪个
+    b.setAttribute('aria-pressed', on?'true':'false');
+    // 选中：橙色文字 + 深色底；未选中：灰字 + 透明底
+    b.style.background = 'transparent';
+    b.style.color = on ? 'var(--acc)' : 'var(--mut)';
+    b.style.fontWeight = on ? '700' : '500';
+    b.style.borderColor = 'transparent';
+    b.style.boxShadow = 'none';
+    b.style.transform = '';
     const label=b.dataset.t==='dark'?'深色': b.dataset.t==='light'?'浅色':'护眼';
-    b.textContent = (on ? '✓ ' : '') + label;
+    b.textContent = label;
   });
 }
 
@@ -1641,7 +1730,7 @@ async function shareBaby(withName){
       <input type="text" id="shareOut" readonly value="${url}"
         style="width:calc(100% - 40px);margin:0 20px;background:var(--card2);border:1px solid var(--line);
                border-radius:12px;padding:12px;font-size:13px;color:var(--tx)">
-      <div class="actions"><button onclick="closeSheet()">关闭</button>
+      <div class="actions"><button class="ghost" onclick="closeSheet()">关闭</button>
         <button class="pri" onclick="tryCopyAgain('${url.replace(/'/g,"\\'")}')">再试复制</button></div>`);
     setTimeout(()=>{
       const el=document.getElementById('shareOut');
@@ -1671,7 +1760,7 @@ function openBabySwitch(){
       <div class="k">新建 / 切换到<small>输入名字，自动读取该名字的记录</small></div>
     </div>
     <input type="text" id="babyIn" placeholder="例如：王奕珩" style="width:100%;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px">
-    <div class="actions"><button onclick="closeSheet()">取消</button><button class="pri" onclick="doSwitchBaby()">切换</button></div>`;
+    <div class="actions"><button class="ghost" onclick="closeSheet()">取消</button><button class="pri" onclick="doSwitchBaby()">切换</button></div>`;
   openSheet(html);
   setTimeout(()=>document.getElementById('babyIn')?.focus(),80);
 }
@@ -1816,7 +1905,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v26';
+  var APP_VER='v27';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
