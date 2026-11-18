@@ -298,6 +298,7 @@ body.selecting #v-log{padding-bottom:150px}
       <h1 id="babyName">宝宝 <span class="swap">⇄</span></h1>
       <div class="sub" id="topSub">—</div>
     </div>
+    <button class="icon-btn" onclick="hardReload()" title="刷新">↻</button>
     <button class="icon-btn" onclick="go('settings')">⚙</button>
   </div>
 
@@ -519,7 +520,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v19';
+const APP_VER='v20';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1461,9 +1462,8 @@ async function forceUpdate(){
       const ks=await caches.keys();
       for(const k of ks) await caches.delete(k);
     }
-    localStorage.removeItem('feedtimer.sess');
   }catch(e){}
-  location.replace(location.pathname + '?baby=' + encodeURIComponent(babyKey()) + '&v=' + APP_VER + '&t=' + Date.now());
+  hardReload();
 }
 
 /* ================= 分享链接 ================= */
@@ -1489,6 +1489,21 @@ function linkFor(name){
   const base = location.origin + location.pathname;
   const v = APP_VER ? '&v=' + APP_VER : '';
   return name ? base + '?baby=' + encodeURIComponent(name) + v : base + '?v=' + APP_VER;
+}
+
+/* 强制刷新当前页：清 SW + 清缓存 + 换 URL（带时间戳，绝不走缓存） */
+async function hardReload(){
+  try{
+    if(navigator.serviceWorker){
+      const rs=await navigator.serviceWorker.getRegistrations();
+      for(const r of rs) await r.unregister();
+    }
+    if(window.caches){
+      const ks=await caches.keys();
+      for(const k of ks) await caches.delete(k);
+    }
+  }catch(e){}
+  location.replace(location.pathname + '?baby=' + encodeURIComponent(babyKey()) + '&v=' + APP_VER + '&t=' + Date.now());
 }
 
 /* 轻提示（顶栏灰字，用于同步状态这类弱信息） */
@@ -1738,7 +1753,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
 /* 版本自检：独立 script，不受主程序影响。
    线上 version.json 比本地 APP_VER 新 → 自动跳到带时间戳的 URL，绕开一切缓存 */
 (function(){
-  var APP_VER='v19';
+  var APP_VER='v20';
   function babyKey(){
     try{ return (localStorage.getItem('feedtimer.cloud.v1') && JSON.parse(localStorage.getItem('feedtimer.cloud.v1')).cur) || ''; }
     catch(e){ return ''; }
