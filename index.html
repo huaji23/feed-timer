@@ -110,8 +110,22 @@ input,select{font:inherit;color:inherit}
 .acts button:active{background:var(--card2)}
 
 /* ---------- 列表 ---------- */
-.sec{padding:18px 20px 0}
-.sec h2{margin:0 0 10px;font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.4px}
+.sec{padding:22px 20px 0}
+.sec h2{margin:0 0 12px;font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.4px}
+/* 卡片内标题：独立类，不跟设置页的 .k 撞车。上下留白让标题明确归属本卡片 */
+.card-h{
+  padding:15px 15px 10px;
+  font-size:14px;line-height:1.4;font-weight:600;color:var(--tx);
+  letter-spacing:.01em;
+}
+.card-h small{display:block;color:var(--mut);font-size:12.5px;font-weight:400;margin-top:3px;line-height:1.45}
+/* 标题与卡片内容之间的间距（内容自带 padding，这里只收窄标题下方） */
+.card-h+.stats{padding:0 12px 12px}
+.card-h+.bars{padding-top:2px}
+.card-h+.donut-wrap{padding-top:2px}
+.card-h+.lr-bar{margin-top:2px}
+.card-h+.hours{padding-top:2px}
+.card-h+.trend{padding-top:2px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:15px;overflow:hidden}
 .row{display:flex;align-items:center;gap:14px;padding:15px 16px;border-bottom:1px solid var(--line);min-height:56px}
 .row:last-child{border-bottom:0}
@@ -124,11 +138,11 @@ input,select{font:inherit;color:inherit}
 .empty{padding:26px 15px;text-align:center;color:var(--mut);font-size:13.5px}
 
 /* ---------- 统计 ---------- */
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;padding:0 20px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
-.stat .k{font-size:11.5px;color:var(--mut)}
-.stat .v{font-size:23px;font-weight:300;margin-top:3px;font-variant-numeric:tabular-nums}
-.stat .v small{font-size:12px;color:var(--mut);margin-left:2px;font-weight:400}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+.stat .k{font-size:12.5px;color:var(--mut);line-height:1.4}
+.stat .v{font-size:24px;font-weight:300;margin-top:5px;font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .v small{font-size:12.5px;color:var(--mut);margin-left:3px;font-weight:400}
 .bars{padding:14px 15px;display:flex;align-items:flex-end;gap:5px;height:112px}
 .bars .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;height:100%}
 .bars .bar{width:100%;background:rgba(240,168,104,.35);border-radius:5px 5px 2px 2px;min-height:3px}
@@ -208,10 +222,10 @@ input,select{font:inherit;color:inherit}
 .trend .tl{font-size:8.5px;color:var(--mut);margin-top:4px;white-space:nowrap}
 
 /* 统计小卡 */
-.stats .stat{background:var(--card2);border-radius:13px;padding:12px 13px}
-.stats .stat .k{font-size:11.5px;color:var(--mut)}
-.stats .stat .v{font-size:22px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
-.stats .stat .v small{font-size:11px;font-weight:400;color:var(--mut);margin-left:3px}
+.stats .stat{background:var(--card2);border-radius:13px;padding:14px 15px}
+.stats .stat .k{font-size:12.5px;color:var(--mut);line-height:1.4}
+.stats .stat .v{font-size:23px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums;line-height:1.15}
+.stats .stat .v small{font-size:11.5px;font-weight:400;color:var(--mut);margin-left:3px}
 
 
 /* 记录页头部 + 多选 */
@@ -442,25 +456,25 @@ body.selecting #v-log{padding-bottom:150px}
   <div class="view" id="v-stats">
     <div class="sec" style="padding-top:16px">
       <div class="card">
-        <div class="k">今日</div>
+        <div class="card-h">今日</div>
         <div class="stats" id="statToday"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">近 7 天时长</div>
+        <div class="card-h">近 7 天时长</div>
         <div class="bars" id="bars7"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">近 7 天次数</div>
+        <div class="card-h">近 7 天次数</div>
         <div class="bars" id="barsN"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">喂养方式分布</div>
+        <div class="card-h">喂养方式分布</div>
         <div class="donut-wrap">
           <div class="donut" id="donut"></div>
           <div class="donut-legend" id="donutLegend"></div>
@@ -469,38 +483,38 @@ body.selecting #v-log{padding-bottom:150px}
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">左右侧时长</div>
+        <div class="card-h">左右侧时长</div>
         <div class="lr-bar" id="lrBar"></div>
         <div class="lr-txt" id="lrTxt"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">时段分布<small>几点喂得最多</small></div>
+        <div class="card-h">时段分布<small>几点喂得最多</small></div>
         <div class="hours" id="hourBars"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">记录间隔<small>相邻两次之间的间隔</small></div>
+        <div class="card-h">记录间隔<small>相邻两次之间的间隔</small></div>
         <div class="stats" id="statGap"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">尿布与体重</div>
+        <div class="card-h">尿布与体重</div>
         <div class="stats" id="statExtra"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">累计</div>
+        <div class="card-h">累计</div>
         <div class="stats" id="statAll"></div>
       </div>
     </div>
     <div class="sec">
       <div class="card">
-        <div class="k">最近 14 天趋势</div>
+        <div class="card-h">最近 14 天趋势</div>
         <div class="trend" id="trend14"></div>
       </div>
     </div>
@@ -511,7 +525,7 @@ body.selecting #v-log{padding-bottom:150px}
     <div class="sec" style="padding-top:16px">
       <div class="card">
         <div class="fld stack">
-          <div class="k">宝宝名字<small>改名字会切换档案 · 同名的人共享同一份记录</small></div>
+          <div class="card-h">宝宝名字<small>改名字会切换档案 · 同名的人共享同一份记录</small></div>
           <div class="row-inline">
             <input type="text" id="setName" placeholder="宝宝昵称" maxlength="12"
                    oninput="markDirty('setName')">
@@ -520,19 +534,19 @@ body.selecting #v-log{padding-bottom:150px}
           <div class="hint-line" id="nameHint"></div>
         </div>
         <div class="fld">
-          <div class="k">超时提醒间隔<small>超过这么久没喂就提醒</small></div>
+          <div class="card-h">超时提醒间隔<small>超过这么久没喂就提醒</small></div>
           <input type="number" class="short" id="setGap" onchange="save()"><span style="color:var(--mut)">分钟</span>
         </div>
         <div class="fld">
-          <div class="k">夜间免打扰<small>这个时段内不主动提醒</small></div>
+          <div class="card-h">夜间免打扰<small>这个时段内不主动提醒</small></div>
           <input type="number" class="short" id="setQ1" onchange="save()">—<input type="number" class="short" id="setQ2" onchange="save()">
         </div>
         <div class="fld">
-          <div class="k">换边提醒阈值<small>单侧喂够这么久提醒换边</small></div>
+          <div class="card-h">换边提醒阈值<small>单侧喂够这么久提醒换边</small></div>
           <input type="number" class="short" id="setSide" onchange="save()"><span style="color:var(--mut)">分钟</span>
         </div>
         <div class="fld stack">
-          <div class="k">主题<small>深色护眼 / 浅色 / 护眼绿</small></div>
+          <div class="card-h">主题<small>深色护眼 / 浅色 / 护眼绿</small></div>
           <div class="seg" id="themeSeg">
             <button data-t="dark" class="on">深色</button>
             <button data-t="light">浅色</button>
@@ -540,7 +554,7 @@ body.selecting #v-log{padding-bottom:150px}
           </div>
         </div>
         <div class="fld stack">
-          <div class="k">分享给家人<small>带名字的链接，对方打开就是同一份记录</small></div>
+          <div class="card-h">分享给家人<small>带名字的链接，对方打开就是同一份记录</small></div>
           <div class="btnrow" style="padding:0">
             <button onclick="shareBaby(true)" id="shareBabyBtn">分享当前宝宝</button>
             <button onclick="shareBaby(false)">复制空白链接</button>
@@ -548,11 +562,11 @@ body.selecting #v-log{padding-bottom:150px}
           <div class="hint-line" id="shareHint"></div>
         </div>
         <div class="fld">
-          <div class="k">版本<small>显示不对就点这里强制更新</small></div>
+          <div class="card-h">版本<small>显示不对就点这里强制更新</small></div>
           <button class="icon-btn" onclick="forceUpdate()" id="verBtn">…</button>
         </div>
         <div class="fld">
-          <div class="k">通知权限<small>超时提醒需要系统通知</small></div>
+          <div class="card-h">通知权限<small>超时提醒需要系统通知</small></div>
           <button class="icon-btn" onclick="askNotify()" id="notifyBtn">开启</button>
         </div>
       </div>
@@ -582,7 +596,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v28';
+const APP_VER='v29';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1020,11 +1034,11 @@ function renderStats(){
   document.getElementById('statToday').innerHTML=[
     ['喂奶次数',tf.length,'次'],['喂奶总时长',Math.round(dur/60),'分'],
     ['平均间隔',avgGap?avgGap.toFixed(1):'—','小时'],['距上次喂',D.feeds[0]?Math.round((Date.now()-D.feeds[0].ts)/60000):'—','分']
-  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
   document.getElementById('statExtra').innerHTML=[
     ['尿布',pee,'次'],['大便',poo,'次'],
     ['今日奶量',ml,'ml'],['最新体重',lastW?kgToJin(lastW.kg):'—',lastW?'斤':'']
-  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
 
   // 7 天柱状
   const days=[]; for(let i=6;i>=0;i--){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-i); days.push(d.getTime()); }
@@ -1103,7 +1117,7 @@ function renderStats(){
     ['间隔≥3小时', allGaps.filter(g=>g>=180).length, '次'],
     ['夜间喂奶', D.feeds.filter(f=>{const h=new Date(f.ts).getHours();return h>=22||h<6;}).length, '次'],
     ['白天喂奶', D.feeds.filter(f=>{const h=new Date(f.ts).getHours();return h>=6&&h<22;}).length, '次']
-  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
 
   /* ---------- 累计 ---------- */
   const allDur=D.feeds.reduce((a,b)=>a+(b.dur||0),0);
@@ -1120,7 +1134,7 @@ function renderStats(){
     ['尿布总数', D.diapers.length, '次'],
     ['体重记录', D.weights.length, '条'],
     ['最早记录', first?new Date(first).toLocaleDateString('zh-CN'):'—', '']
-  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  ].map(([k,v,u])=>`<div class="stat"><div class="card-h">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
 
   /* ---------- 14 天趋势 ---------- */
   const t14=[], lb14=[];
@@ -1761,7 +1775,7 @@ function openBabySwitch(){
   }
   html+=`</div>
     <div class="fld" style="border:none;padding-left:0;padding-right:0">
-      <div class="k">新建 / 切换到<small>输入名字，自动读取该名字的记录</small></div>
+      <div class="card-h">新建 / 切换到<small>输入名字，自动读取该名字的记录</small></div>
     </div>
     <input type="text" id="babyIn" placeholder="例如：王奕珩" style="width:100%;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px">
     <div class="actions"><button class="ghost" onclick="closeSheet()">取消</button><button class="pri" onclick="doSwitchBaby()">切换</button></div>`;
@@ -1909,7 +1923,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v28';
+  var APP_VER='v29';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
