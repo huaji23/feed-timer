@@ -520,7 +520,7 @@ body.selecting #v-log{padding-bottom:150px}
    云端：COS shared/babies.json（多人共享）
    按「宝宝档案名」分桶：{ "王奕珩": {feeds:[],diapers:[],weights:[],settings:{}} } */
 const KEY='feedtimer.v1';
-const APP_VER='v23';
+const APP_VER='v24';
 const THEME_KEY='feedtimer.theme';   // 主题是「设备级」偏好，不跟宝宝档案走
 const CLOUD_READ='https://wanghuaji-1253952710.cos.ap-guangzhou.myqcloud.com/shared/babies.json';
 const CLOUD_PUT=atob('aHR0cHM6Ly93YW5naHVhamktMTI1Mzk1MjcxMC5jb3MuYXAtZ3Vhbmd6aG91Lm15cWNsb3VkLmNvbS9zaGFyZWQvYmFiaWVzLmpzb24/cS1zaWduLWFsZ29yaXRobT1zaGExJnEtYWs9QUtJREc2dGE0TlVPNmJ0enNYMUtRTGl0cmhMelFmcG5ZNlNrJnEtc2lnbi10aW1lPTE3OTQ5'+'NzQyNDglM0IyMTEwMzM0MzA4JnEta2V5LXRpbWU9MTc5NDk3NDI0OCUzQjIxMTAzMzQzMDgmcS1oZWFkZXItbGlzdD1jb250ZW50LXR5cGUlM0Job3N0JnEtdXJsLXBhcmFtLWxpc3Q9JnEtc2lnbmF0dXJlPWViNTliNDExZDFjNTBhOGVjY2Q5ZmRhOTMyNDU4MDk4YTJmOTFlMTI=');   // 预签名 PUT（10年有效，分段 base64 避免被 GitHub secret scanning 拦）;   // 预签名 PUT（部署时注入）
@@ -1742,16 +1742,16 @@ render();
     setTimeout(()=>openBabySwitch(), 400);
   }
 })();
-/* 注册 SW 时带时间戳 → 每次都强制重新下载 sw.js，浏览器立刻发现新版本 */
+/* 注册 SW：URL 必须固定（带时间戳会导致每次都算新 SW → 无限重载）
+   注册后用 reg.update() 强制检查一次更新，这个不会重复安装 */
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?t='+Date.now()).then(reg=>{
-    // 有新 SW 装好了 → 立刻接管当前页
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    try{ reg.update(); }catch(e){}
+    // 有新 SW 等待接管 → 让它立刻接管（不重载页面）
     if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
   }).catch(()=>{});
-  navigator.serviceWorker.addEventListener('controllerchange',()=>{
-    // SW 换人后重载一次，拿到新代码
-    if(!window.__swReloaded){ window.__swReloaded=1; location.reload(); }
-  });
+  // 注意：这里绝对不要在 controllerchange 里 location.reload()
+  // —— 会和上面的注册形成无限循环
 }
 /* 页面回到前台时刷新；并且任何点击都刷新 ——
    iOS 在后台会冻结 JS 定时器，靠定时器驱动会显示旧值。
@@ -1766,7 +1766,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
    1) 线上 version.json 比本地新 → 跳到带时间戳的新 URL
    2) URL 里没有 _r 参数 → 强制重载一次（保证是最新文件，不吃浏览器缓存） */
 (function(){
-  var APP_VER='v23';
+  var APP_VER='v24';
   function cur(){
     try{
       var v=JSON.parse(localStorage.getItem('feedtimer.cloud.v1')||'{}');
@@ -1774,6 +1774,12 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
     }catch(e){ return ''; }
   }
   function jump(ver){
+    // 防抖：10 秒内不重复跳（防跳转循环），但之后真要更新还能跳
+    try{
+      var last=parseInt(sessionStorage.getItem('feedtimer._jt')||'0',10);
+      if(Date.now()-last < 10000) return;
+      sessionStorage.setItem('feedtimer._jt', String(Date.now()));
+    }catch(e){}
     var q='?baby='+encodeURIComponent(cur())+'&v='+ver+'&_r='+Date.now();
     location.replace(location.pathname+q);
   }
@@ -1794,14 +1800,7 @@ document.addEventListener('pointerdown',()=>{ if(sess){ accrue(); render(); } },
           jump(j.ver);              // 线上更新 → 跳过去
           return;
         }
-        // 版本一致，但 URL 没带 _r → 说明可能是旧缓存的同一版本，硬刷一次拿干净文件
-        if(!q.get('_r')){
-          try{
-            if(sessionStorage.getItem('feedtimer._clean')==='1') return;
-            sessionStorage.setItem('feedtimer._clean','1');
-          }catch(e){}
-          jump(j.ver);
-        }
+        // 版本一致 → 什么都不做（避免任何自动跳转打扰用户）
       })
       .catch(function(){});
   }
